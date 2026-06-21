@@ -4,15 +4,24 @@ import {
   type StorefrontProduct,
 } from "@/components/shop-storefront"
 import { hasConvexUrl, sortBySortOrder } from "@/lib/shop"
+import { catalogQueryOptions } from "@/lib/shop-queries"
+import { useSuspenseQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { api } from "@workspace/backend/api"
 import { buttonVariants } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
-import { useQuery } from "convex/react"
 import { ArrowRightIcon } from "lucide-react"
 import { useMemo } from "react"
 
-export const Route = createFileRoute("/")({ component: HomePage })
+export const Route = createFileRoute("/")({
+  loader: async ({ context: { queryClient } }) => {
+    if (!hasConvexUrl()) {
+      return
+    }
+
+    await queryClient.ensureQueryData(catalogQueryOptions())
+  },
+  component: HomePage,
+})
 
 const EMPTY_CATEGORIES: Array<StorefrontCategory> = []
 const EMPTY_PRODUCTS: Array<StorefrontProduct> = []
@@ -26,9 +35,9 @@ function HomePage() {
 }
 
 function CatalogHome() {
-  const data = useQuery(api.shop.listCatalog)
+  const { data } = useSuspenseQuery(catalogQueryOptions())
   const categories: Array<StorefrontCategory> =
-    data?.categories ?? EMPTY_CATEGORIES
+    data.categories ?? EMPTY_CATEGORIES
   const products: Array<StorefrontProduct> = data?.products ?? EMPTY_PRODUCTS
 
   const firstLevelCategories = useMemo(
@@ -45,9 +54,6 @@ function CatalogHome() {
       categories={categories}
       childCategories={firstLevelCategories}
       products={products}
-      title="Maillots de football"
-      subtitle="Parcours les sélections par compétition, équipe nationale ou club. Les produits restent dans la même arborescence que celle utilisée par l'administration."
-      isLoading={data === undefined}
     />
   )
 }

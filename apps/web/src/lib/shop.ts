@@ -6,12 +6,7 @@ export function formatPrice(cents: number, currency: string) {
   const normalizedCurrency = currency.toUpperCase()
 
   if (normalizedCurrency === "EUR") {
-    const amount = cents / 100
-    const formattedAmount = Number.isInteger(amount)
-      ? String(amount)
-      : amount.toFixed(2).replace(".", ",")
-
-    return `${formattedAmount} €`
+    return `${(cents / 100).toFixed(2)} €`
   }
 
   return `${normalizedCurrency} ${(cents / 100).toFixed(2)}`
@@ -34,10 +29,16 @@ export function centsToPriceInput(cents: number) {
 
 export function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
-    return error.message
+    const uncaughtError = error.message.match(/Uncaught Error:\s*([^\n]+)/)
+
+    return uncaughtError?.[1]?.trim() ?? error.message
   }
 
   return "Something went wrong."
+}
+
+export function displayOptionLabel(label: string) {
+  return label.trim().toLowerCase() === "jersey flocking" ? "Flocking" : label
 }
 
 export function slugify(value: string) {

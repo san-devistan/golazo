@@ -1,0 +1,198 @@
+"use node"
+
+import { StripeSubscriptions } from "@convex-dev/stripe"
+import { v } from "convex/values"
+import Stripe from "stripe"
+
+import { components, internal } from "./_generated/api"
+import type { Id } from "./_generated/dataModel.d.ts"
+import { action } from "./_generated/server"
+
+const SITE_URL_FALLBACK = "http://localhost:3000"
+const STRIPE_API_VERSION = "2026-02-25.clover" as const
+const MAX_STRIPE_DESCRIPTION_LENGTH = 900
+const stripeComponent = new StripeSubscriptions(components.stripe, {})
+const DEFAULT_SHIPPING_ALLOWED_COUNTRIES: Array<Stripe.Checkout.SessionCreateParams.ShippingAddressCollection.AllowedCountry> =
+  ["FR"]
+
+type CheckoutActionLineItem = {
+  productName: string
+  imageUrl: string | null
+  unitPriceCents: number
+  currency: string
+  quantity: number
+  configurationSummary: Array<{ label: string; value: string }>
+}
+
+type PendingCheckoutOrder = {
+  orderId: Id<"checkoutOrders">
+  commandId: string
+  items: Array<CheckoutActionLineItem>
+}
+
+type CreateCartCheckoutResult = {
+  sessionId: string
+  url: string
+}
+
+function requireStripeSecretKey() {
+  const apiKey = process.env.STRIPE_SECRET_KEY
+
+  if (!apiKey) {
+    throw new Error("STRIPE_SECRET_KEY is not set.")
+  }
+
+  return apiKey
+}
+
+function siteUrl() {
+  return process.env.SITE_URL ?? SITE_URL_FALLBACK
+}
+
+function normalizeCancelPath(value: string | undefined) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/"
+  }
+
+  return value
+}
+
+function shippingAllowedCountries() {
+  const configuredCountries =
+    process.env.STRIPE_SHIPPING_ALLOWED_COUNTRIES?.split(",")
+      .map((country) => country.trim().toUpperCase())
+      .filter((country) => /^[A-Z]{2}$/.test(country))
+
+  if (configuredCountries && configuredCountries.length > 0) {
+    return configuredCountries as Array<Stripe.Checkout.SessionCreateParams.ShippingAddressCollection.AllowedCountry>
+  }
+
+  return DEFAULT_SHIPPING_ALLOWED_COUNTRIES
+}
+
+function summaryDescription(summary: Array<{ label: string; value: string }>) {
+  if (summary.length === 0) {
+    return undefined
+  }
+
+  const description = summary
+    .map((item) => `${item.label}: ${item.value}`)
+    .join("\n")
+
+  return description.slice(0, MAX_STRIPE_DESCRIPTION_LENGTH)
+}
+
+function checkoutLineItem(
+  item: CheckoutActionLineItem
+): Stripe.Checkout.SessionCreateParams.LineItem {
+  const description = summaryDescription(item.configurationSummary)
+
+  return {
+    price_data: {
+      currency: item.currency.toLowerCase(),
+      product_data: {
+        name: item.productName,
+        ...(description !== undefined && { description }),
+        ...(item.imageUrl ? { images: [item.imageUrl] } : {}),
+      },
+      unit_amount: item.unitPriceCents,
+    },
+    quantity: item.quantity,
+  }
+}
+
+function checkoutMetadata({
+  commandId,
+  orderId,
+  userTokenIdentifier,
+}: {
+  commandId: string
+  orderId: string
+  userTokenIdentifier: string
+}) {
+  return {
+    commandId,
+    orderId,
+    userId: userTokenIdentifier,
+  }
+}
+
+export const createCartCheckout = action({
+  args: {
+    cancelPath: v.optional(v.string()),
+  },
+  returns: v.object({
+    sessionId: v.string(),
+    url: v.string(),
+  }),
+  handler: async (ctx, args): Promise<CreateCartCheckoutResult> => {
+    const identity = await ctx.auth.getUserIdentity()
+
+    if (!identity) {
+      throw new Error("Sign in to checkout.")
+    }
+
+    const userTokenIdentifier = identity.tokenIdentifier
+    const order: PendingCheckoutOrder = await ctx.runMutation(
+      internal.checkoutModel.createPendingOrderFromCart,
+      { userTokenIdentifier }
+    )
+
+    try {
+      const customer = await stripeComponent.getOrCreateCustomer(ctx, {
+        userId: userTokenIdentifier,
+        email: identity.email,
+      })
+      const stripe = new Stripe(requireStripeSecretKey(), {
+        apiVersion: STRIPE_API_VERSION,
+      })
+      const checkoutSiteUrl = siteUrl()
+      const metadata = checkoutMetadata({
+        commandId: order.commandId,
+        orderId: order.orderId,
+        userTokenIdentifier,
+      })
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        customer: customer.customerId,
+        client_reference_id: order.commandId,
+        line_items: order.items.map(checkoutLineItem),
+        shipping_address_collection: {
+          allowed_countries: shippingAllowedCountries(),
+        },
+        phone_number_collection: {
+          enabled: true,
+        },
+        success_url: `${checkoutSiteUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${checkoutSiteUrl}${normalizeCancelPath(args.cancelPath)}`,
+        metadata,
+        payment_intent_data: {
+          metadata,
+        },
+      })
+
+      if (!session.url) {
+        throw new Error("Stripe did not return a checkout URL.")
+      }
+
+      await ctx.runMutation(internal.checkoutModel.attachCheckoutSession, {
+        orderId: order.orderId,
+        stripeCheckoutSessionId: session.id,
+        stripeCustomerId: customer.customerId,
+      })
+
+      return {
+        sessionId: session.id,
+        url: session.url,
+      }
+    } catch (error) {
+      await ctx.runMutation(internal.checkoutModel.markCheckoutCreationFailed, {
+        orderId: order.orderId,
+        failureReason:
+          error instanceof Error ? error.message : "Failed to create checkout.",
+      })
+
+      throw error
+    }
+  },
+})

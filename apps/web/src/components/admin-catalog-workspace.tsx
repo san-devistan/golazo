@@ -1,14 +1,27 @@
 import { ShopStorefront } from "@/components/shop-storefront"
 import {
   centsToPriceInput,
+  displayOptionLabel,
   formatPrice,
   getErrorMessage,
   priceInputToCents,
+  slugify,
   sortBySortOrder,
 } from "@/lib/shop"
 import { Link } from "@tanstack/react-router"
-/* eslint-disable complexity, jsx-a11y/label-has-associated-control, max-lines, max-lines-per-function, no-underscore-dangle, react-perf/jsx-no-new-array-as-prop, react-perf/jsx-no-new-function-as-prop */
+/* eslint-disable complexity, max-lines, max-lines-per-function, no-underscore-dangle, react-perf/jsx-no-new-array-as-prop, react-perf/jsx-no-new-function-as-prop */
 import { api } from "@workspace/backend/api"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button, buttonVariants } from "@workspace/ui/components/button"
 import {
   Dialog,
@@ -20,18 +33,31 @@ import {
 } from "@workspace/ui/components/dialog"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { Textarea } from "@workspace/ui/components/textarea"
+import { toast } from "@workspace/ui/components/sonner"
 import { useAction, useMutation, useQuery } from "convex/react"
 import type { GenericId } from "convex/values"
-import { ImageUpIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react"
-import { useEffect, useState } from "react"
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  EyeIcon,
+  EyeOffIcon,
+  GripVerticalIcon,
+  ImageUpIcon,
+  PlusIcon,
+  SaveIcon,
+  Trash2Icon,
+} from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 type CategoryId = GenericId<"catalogCategories">
 type ProductId = GenericId<"products">
+type ProductImageId = GenericId<"productImages">
 type ProductOptionId = GenericId<"productOptions">
 type ProductMetadataId = GenericId<"productMetadata">
 type ProductOptionTemplateId = GenericId<"productOptionTemplates">
-type ProductStatus = "draft" | "published" | "archived"
+type ProductStatus = "draft" | "published"
+type ProductRecordStatus = ProductStatus | "archived"
+type ProductMetadataType = "text" | "number" | "boolean" | "link"
 
 type ChoiceConfig = {
   type: "choice"
@@ -89,9 +115,17 @@ type AdminOption = {
 type AdminMetadata = {
   _id: ProductMetadataId
   label: string
-  key: string
-  type: "text" | "number" | "boolean"
+  type?: ProductMetadataType
   value: string
+  linkUrl?: string | null
+  showOnProductPage?: boolean
+}
+
+type AdminProductImage = {
+  _id: ProductImageId
+  imageUrl: string
+  cloudinaryPublicId: string | null
+  cloudinaryAssetFolder: string | null
   sortOrder: number
 }
 
@@ -103,16 +137,19 @@ type AdminProductRecord = {
     description: string
     basePriceCents: number
     currency: string
-    status: ProductStatus
+    status: ProductRecordStatus
     sku: string | null
     imageUrl: string | null
     cloudinaryPublicId: string | null
     cloudinaryAssetFolder: string | null
     sortOrder?: number
   }
+  images: Array<AdminProductImage>
   options: Array<AdminOption>
   metadata: Array<AdminMetadata>
 }
+
+const EMPTY_PRODUCT_RECORDS: Array<AdminProductRecord> = []
 
 type CategoryFormState = {
   categoryId: CategoryId | null
@@ -126,10 +163,17 @@ type ProductMetadataFormState = {
   localId: string
   metadataId: ProductMetadataId | null
   label: string
-  key: string
-  type: "text" | "number" | "boolean"
+  type: ProductMetadataType
   value: string
-  sortOrder: string
+  showOnProductPage: boolean
+}
+
+type ProductImageFormState = {
+  localId: string
+  imageId: ProductImageId | null
+  imageUrl: string
+  cloudinaryPublicId: string
+  cloudinaryAssetFolder: string
 }
 
 type ProductFormState = {
@@ -141,14 +185,17 @@ type ProductFormState = {
   currency: string
   status: ProductStatus
   sku: string
-  imageUrl: string
-  cloudinaryPublicId: string
   cloudinaryAssetFolder: string
+  images: Array<ProductImageFormState>
   sortOrder: string
   optionTemplateIds: Array<ProductOptionTemplateId>
   optionIdsByTemplateId: Record<string, ProductOptionId>
   metadata: Array<ProductMetadataFormState>
 }
+
+type DeleteTarget =
+  | { type: "category"; category: AdminCategory }
+  | { type: "product"; product: AdminProductRecord["product"] }
 
 type CloudinaryUploadResponse = {
   secure_url: string
@@ -156,6 +203,27 @@ type CloudinaryUploadResponse = {
   asset_folder?: string
   folder?: string
 }
+
+type CloudinaryUploadSignature = {
+  cloudName: string
+  apiKey: string
+  allowedFormats: string
+  timestamp: number
+  signature: string
+  assetFolder: string
+}
+
+const PRODUCT_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/avif"
+const PRODUCT_IMAGE_PREPARATION_ENDPOINT = "/api/products/image-background"
+const PRODUCT_IMAGE_UPLOAD_MIME_TYPE = "image/webp"
+const PRODUCT_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+])
+const MAX_PRODUCT_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
+const MAX_PRODUCT_IMAGE_COUNT = 12
 
 function createLocalId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -171,20 +239,16 @@ function parseSortOrder(value: string, fallback: number) {
   return Number.isFinite(parsedValue) ? parsedValue : fallback
 }
 
-function metadataTypeFromValue(value: string): "text" | "number" | "boolean" {
-  if (value === "number" || value === "boolean") {
+function productVisibilityStatus(status: ProductRecordStatus): ProductStatus {
+  return status === "published" ? "published" : "draft"
+}
+
+function metadataTypeFromValue(value: string): ProductMetadataType {
+  if (value === "number" || value === "boolean" || value === "link") {
     return value
   }
 
   return "text"
-}
-
-function productStatusFromValue(value: string): ProductStatus {
-  if (value === "published" || value === "archived") {
-    return value
-  }
-
-  return "draft"
 }
 
 function emptyCategoryForm(
@@ -212,11 +276,10 @@ function emptyProductForm(
     description: "",
     basePrice: "89.00",
     currency: "EUR",
-    status: "draft",
+    status: "published",
     sku: "",
-    imageUrl: "",
-    cloudinaryPublicId: "",
     cloudinaryAssetFolder: "",
+    images: [],
     sortOrder: String(sortOrder),
     optionTemplateIds: templates.flatMap((template) =>
       template.isActive && template.isRequired ? [template._id] : []
@@ -240,11 +303,10 @@ function productRecordToForm(record: AdminProductRecord): ProductFormState {
     description: record.product.description,
     basePrice: centsToPriceInput(record.product.basePriceCents),
     currency: record.product.currency,
-    status: record.product.status,
+    status: productVisibilityStatus(record.product.status),
     sku: record.product.sku ?? "",
-    imageUrl: record.product.imageUrl ?? "",
-    cloudinaryPublicId: record.product.cloudinaryPublicId ?? "",
     cloudinaryAssetFolder: record.product.cloudinaryAssetFolder ?? "",
+    images: productRecordImagesToForm(record),
     sortOrder: String(record.product.sortOrder ?? 0),
     optionTemplateIds: record.options.flatMap((option) =>
       option.templateId ? [option.templateId] : []
@@ -254,12 +316,38 @@ function productRecordToForm(record: AdminProductRecord): ProductFormState {
       localId: createLocalId("metadata"),
       metadataId: item._id,
       label: item.label,
-      key: item.key,
-      type: item.type,
+      type: item.type ?? (item.linkUrl ? "link" : "text"),
       value: item.value,
-      sortOrder: String(item.sortOrder),
+      showOnProductPage: item.showOnProductPage ?? true,
     })),
   }
+}
+
+function productRecordImagesToForm(
+  record: AdminProductRecord
+): Array<ProductImageFormState> {
+  const images =
+    record.images.length > 0
+      ? sortBySortOrder(record.images)
+      : record.product.imageUrl
+        ? [
+            {
+              _id: null,
+              imageUrl: record.product.imageUrl,
+              cloudinaryPublicId: record.product.cloudinaryPublicId,
+              cloudinaryAssetFolder: record.product.cloudinaryAssetFolder,
+              sortOrder: 0,
+            },
+          ]
+        : []
+
+  return images.map((image) => ({
+    localId: createLocalId("image"),
+    imageId: image._id,
+    imageUrl: image.imageUrl,
+    cloudinaryPublicId: image.cloudinaryPublicId ?? "",
+    cloudinaryAssetFolder: image.cloudinaryAssetFolder ?? "",
+  }))
 }
 
 function isCloudinaryUploadResponse(
@@ -273,6 +361,162 @@ function isCloudinaryUploadResponse(
   const publicId = Reflect.get(value, "public_id")
 
   return typeof secureUrl === "string" && typeof publicId === "string"
+}
+
+function assertProductImageFile(file: File) {
+  if (!PRODUCT_IMAGE_TYPES.has(file.type)) {
+    throw new Error("Upload a JPG, PNG, WebP, or AVIF image.")
+  }
+
+  if (file.size > MAX_PRODUCT_IMAGE_SIZE_BYTES) {
+    throw new Error("Product images must be 10 MB or smaller.")
+  }
+}
+
+function assertProductImageCapacity(currentCount: number, uploadCount: number) {
+  if (currentCount + uploadCount > MAX_PRODUCT_IMAGE_COUNT) {
+    throw new Error(
+      `Products can have up to ${MAX_PRODUCT_IMAGE_COUNT} images.`
+    )
+  }
+}
+
+async function prepareProductImageForUpload(file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+
+  const response = await fetch(PRODUCT_IMAGE_PREPARATION_ENDPOINT, {
+    body: formData,
+    method: "POST",
+  })
+
+  if (!response.ok) {
+    throw new Error(await productImagePreparationError(response))
+  }
+
+  const blob = await response.blob()
+
+  if (blob.size === 0) {
+    throw new Error("Prepared product image is empty.")
+  }
+
+  return new File([blob], productImageUploadFileName(file), {
+    type: blob.type || PRODUCT_IMAGE_UPLOAD_MIME_TYPE,
+  })
+}
+
+async function productImagePreparationError(response: Response) {
+  try {
+    const payload: unknown = await response.json()
+
+    if (payload && typeof payload === "object") {
+      const message = Reflect.get(payload, "error")
+
+      if (typeof message === "string" && message.trim()) {
+        return message
+      }
+    }
+  } catch {
+    return "Could not prepare the product image."
+  }
+
+  return "Could not prepare the product image."
+}
+
+function productImageUploadFileName(file: File) {
+  const baseName = file.name.replace(/\.[^.]+$/, "").trim() || "product-image"
+
+  return `${baseName}-background.webp`
+}
+
+async function uploadProductImageToCloudinary(
+  uploadFile: File,
+  uploadSignature: CloudinaryUploadSignature
+) {
+  const formData = new FormData()
+  formData.append("file", uploadFile)
+  formData.append("api_key", uploadSignature.apiKey)
+  formData.append("allowed_formats", uploadSignature.allowedFormats)
+  formData.append("timestamp", String(uploadSignature.timestamp))
+  formData.append("signature", uploadSignature.signature)
+
+  formData.append("asset_folder", uploadSignature.assetFolder)
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${uploadSignature.cloudName}/image/upload`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  )
+  const payload: unknown = await response.json().catch(() => null)
+
+  if (!response.ok || !isCloudinaryUploadResponse(payload)) {
+    throw new Error("Cloudinary upload failed.")
+  }
+
+  return {
+    localId: createLocalId("image"),
+    imageId: null,
+    imageUrl: payload.secure_url,
+    cloudinaryPublicId: payload.public_id,
+    cloudinaryAssetFolder:
+      payload.asset_folder ?? payload.folder ?? uploadSignature.assetFolder,
+  } satisfies ProductImageFormState
+}
+
+function moveProductImageBefore(
+  images: Array<ProductImageFormState>,
+  draggedLocalId: string,
+  targetLocalId: string
+) {
+  if (draggedLocalId === targetLocalId) {
+    return images
+  }
+
+  const draggedImage = images.find((image) => image.localId === draggedLocalId)
+  if (!draggedImage) {
+    return images
+  }
+
+  const withoutDragged = images.filter(
+    (image) => image.localId !== draggedLocalId
+  )
+  const targetIndex = withoutDragged.findIndex(
+    (image) => image.localId === targetLocalId
+  )
+
+  if (targetIndex < 0) {
+    return images
+  }
+
+  return [
+    ...withoutDragged.slice(0, targetIndex),
+    draggedImage,
+    ...withoutDragged.slice(targetIndex),
+  ]
+}
+
+function moveProductImageByOffset(
+  images: Array<ProductImageFormState>,
+  index: number,
+  offset: number
+) {
+  const targetIndex = index + offset
+  if (targetIndex < 0 || targetIndex >= images.length) {
+    return images
+  }
+
+  const nextImages = Array.from(images)
+  const [image] = nextImages.splice(index, 1)
+
+  if (!image) {
+    return images
+  }
+
+  nextImages.splice(targetIndex, 0, image)
+
+  return nextImages
 }
 
 function buildOptionsFromTemplates(
@@ -290,7 +534,7 @@ function buildOptionsFromTemplates(
       {
         optionId: form.optionIdsByTemplateId[template._id] ?? null,
         templateId: template._id,
-        label: template.label,
+        label: displayOptionLabel(template.label),
         key: template.key,
         isRequired: template.isRequired,
         priceDeltaCents: template.priceDeltaCents,
@@ -298,24 +542,6 @@ function buildOptionsFromTemplates(
         config: template.config,
       },
     ]
-  })
-}
-
-function categoryBreadcrumbs(
-  category: AdminCategory | null,
-  categories: Array<AdminCategory>
-) {
-  if (!category) {
-    return []
-  }
-
-  const parts = category.path.split("/")
-
-  return parts.flatMap((_, index) => {
-    const path = parts.slice(0, index + 1).join("/")
-    const item = categories.find((candidate) => candidate.path === path)
-
-    return item ? [item] : []
   })
 }
 
@@ -334,15 +560,20 @@ function sortProductRecords(records: Array<AdminProductRecord>) {
 
 export function AdminCatalogWorkspace({
   categoryId,
+  categoryPath,
 }: {
   categoryId?: CategoryId
+  categoryPath?: string
 }) {
   const data = useQuery(api.shop.listAdmin)
   const upsertCategory = useMutation(api.shop.upsertCategory)
   const upsertProduct = useMutation(api.shop.upsertProduct)
-  const archiveProduct = useMutation(api.shop.archiveProduct)
+  const deleteCategory = useAction(api.cloudinary.deleteCategory)
+  const deleteProduct = useAction(api.cloudinary.deleteProduct)
   const reorderCategories = useMutation(api.shop.reorderCategories)
   const reorderProducts = useMutation(api.shop.reorderProducts)
+  const setCategoryVisibility = useMutation(api.shop.setCategoryVisibility)
+  const setProductVisibility = useMutation(api.shop.setProductVisibility)
   const createCloudinaryUploadSignature = useAction(
     api.cloudinary.createUploadSignature
   )
@@ -350,34 +581,50 @@ export function AdminCatalogWorkspace({
     null
   )
   const [productForm, setProductForm] = useState<ProductFormState | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [showBackendSetupState, setShowBackendSetupState] = useState(false)
 
   const categories = data?.categories ?? []
   const templates = data?.optionTemplates ?? []
-  const currentCategory =
-    categoryId === undefined
-      ? null
-      : (categories.find((category) => category._id === categoryId) ?? null)
+  const currentCategory = resolveCurrentCategory({
+    categories,
+    categoryId,
+    categoryPath,
+  })
   const parentId = currentCategory?._id ?? null
   const childCategories = sortBySortOrder(
     categories.filter((category) => category.parentId === parentId)
   )
-  const products = data?.products ?? []
-  const leafProducts = sortProductRecords(
+  const productRecords = data?.products ?? EMPTY_PRODUCT_RECORDS
+  const pageCategoryIds = currentCategory
+    ? new Set<CategoryId>([
+        currentCategory._id,
+        ...childCategories.map((category) => category._id),
+      ])
+    : new Set<CategoryId>()
+  const pageProductRecords = sortProductRecords(
+    productRecords.filter(
+      (record) =>
+        !currentCategory || pageCategoryIds.has(record.product.categoryId)
+    )
+  )
+  const directProductRecords = sortProductRecords(
     currentCategory
-      ? products.filter(
+      ? productRecords.filter(
           (record) => record.product.categoryId === currentCategory._id
         )
       : []
   )
-  const breadcrumbs = categoryBreadcrumbs(currentCategory, categories)
-  const canAddProduct = Boolean(currentCategory && childCategories.length === 0)
-  const productRecordsById = new Map(
-    leafProducts.map((record) => [record.product._id, record])
+  const canAddProduct = Boolean(currentCategory)
+  const productRecordsById = useMemo(
+    () => new Map(productRecords.map((record) => [record.product._id, record])),
+    [productRecords]
   )
+  const productAssignableCategories = currentCategory
+    ? [currentCategory, ...childCategories]
+    : []
 
   useEffect(() => {
     if (data !== undefined) {
@@ -392,6 +639,33 @@ export function AdminCatalogWorkspace({
     return () => window.clearTimeout(timeoutId)
   }, [data])
 
+  useEffect(() => {
+    if (data === undefined) {
+      return
+    }
+
+    const url = new URL(window.location.href)
+    const editProductId = url.searchParams.get("editProduct")
+
+    if (!editProductId) {
+      return
+    }
+
+    const record = productRecords.find(
+      (item) => item.product._id === editProductId
+    )
+    if (record) {
+      setProductForm(productRecordToForm(record))
+    }
+
+    url.searchParams.delete("editProduct")
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`
+    )
+  }, [data, productRecords])
+
   if (data === undefined) {
     if (showBackendSetupState) {
       return <BackendSetupState />
@@ -404,14 +678,15 @@ export function AdminCatalogWorkspace({
     )
   }
 
+  if (categoryPath && !currentCategory) {
+    return <AdminCategoryUnavailable categories={categories} />
+  }
+
   async function handleSaveCategory(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!categoryForm) {
       return
     }
-
-    setErrorMessage(null)
-    setStatusMessage(null)
 
     try {
       await upsertCategory({
@@ -424,24 +699,25 @@ export function AdminCatalogWorkspace({
         ),
         isActive: categoryForm.isActive,
       })
-      setStatusMessage("Category saved.")
+      toast.success("Category saved.")
       setCategoryForm(null)
     } catch (error) {
-      setErrorMessage(getErrorMessage(error))
+      toast.error(getErrorMessage(error))
     }
   }
 
   async function handleSaveProduct(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!productForm?.categoryId) {
-      setErrorMessage("Select a category before saving the product.")
+      toast.error("Select a category before saving the product.")
       return
     }
 
-    setErrorMessage(null)
-    setStatusMessage(null)
-
     try {
+      const productSortFallback = productRecords.filter(
+        (record) => record.product.categoryId === productForm.categoryId
+      ).length
+
       await upsertProduct({
         productId: productForm.productId,
         categoryId: productForm.categoryId,
@@ -451,130 +727,168 @@ export function AdminCatalogWorkspace({
         currency: productForm.currency,
         status: productForm.status,
         sku: nullableText(productForm.sku),
-        imageUrl: nullableText(productForm.imageUrl),
-        cloudinaryPublicId: nullableText(productForm.cloudinaryPublicId),
-        cloudinaryAssetFolder: nullableText(productForm.cloudinaryAssetFolder),
-        sortOrder: parseSortOrder(productForm.sortOrder, leafProducts.length),
+        cloudinaryAssetFolder: null,
+        sortOrder: parseSortOrder(productForm.sortOrder, productSortFallback),
+        images: productForm.images.map((image, index) => ({
+          imageId: image.imageId,
+          imageUrl: image.imageUrl,
+          cloudinaryPublicId: nullableText(image.cloudinaryPublicId),
+          cloudinaryAssetFolder: nullableText(image.cloudinaryAssetFolder),
+          sortOrder: index,
+        })),
         options: buildOptionsFromTemplates(productForm, templates),
         metadata: productForm.metadata.map((item, index) => ({
           metadataId: item.metadataId,
           label: item.label,
-          key: item.key,
           type: item.type,
           value: item.value,
-          sortOrder: parseSortOrder(item.sortOrder, index),
+          linkUrl: null,
+          showOnProductPage: item.showOnProductPage,
+          sortOrder: index,
         })),
       })
-      setStatusMessage("Product saved.")
+      toast.success("Product saved.")
       setProductForm(null)
     } catch (error) {
-      setErrorMessage(getErrorMessage(error))
+      toast.error(getErrorMessage(error))
     }
   }
 
   async function handleReorderCategories(
     orderedCategoryIds: Array<CategoryId>
   ) {
-    setErrorMessage(null)
-    setStatusMessage(null)
-
     try {
       await reorderCategories({
         parentId,
         orderedCategoryIds,
       })
-      setStatusMessage("Category order saved.")
+      toast.success("Category order saved.")
     } catch (error) {
-      setErrorMessage(getErrorMessage(error))
+      toast.error(getErrorMessage(error))
     }
   }
 
-  async function handleReorderProducts(orderedProductIds: Array<ProductId>) {
-    if (!currentCategory) {
+  async function handleReorderProducts(
+    productCategoryId: CategoryId,
+    orderedProductIds: Array<ProductId>
+  ) {
+    try {
+      await reorderProducts({
+        categoryId: productCategoryId,
+        orderedProductIds,
+      })
+      toast.success("Product order saved.")
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+    }
+  }
+
+  async function handleToggleCategoryVisibility(category: AdminCategory) {
+    const isActive = !(category.isActive ?? true)
+
+    try {
+      await setCategoryVisibility({
+        categoryId: category._id,
+        isActive,
+      })
+      toast.success(isActive ? "Category visible." : "Category hidden.")
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+    }
+  }
+
+  async function handleToggleProductVisibility(
+    product: AdminProductRecord["product"]
+  ) {
+    const status = product.status === "published" ? "draft" : "published"
+
+    try {
+      await setProductVisibility({
+        productId: product._id,
+        status,
+      })
+      toast.success(
+        status === "published" ? "Product published." : "Product hidden."
+      )
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) {
       return
     }
 
-    setErrorMessage(null)
-    setStatusMessage(null)
+    setIsDeleting(true)
 
     try {
-      await reorderProducts({
-        categoryId: currentCategory._id,
-        orderedProductIds,
-      })
-      setStatusMessage("Product order saved.")
+      if (deleteTarget.type === "category") {
+        const parentHref = parentAdminHref(deleteTarget.category)
+
+        await deleteCategory({ categoryId: deleteTarget.category._id })
+        toast.success("Category deleted.")
+        setDeleteTarget(null)
+
+        if (currentCategory?._id === deleteTarget.category._id) {
+          window.location.assign(parentHref)
+        }
+
+        return
+      }
+
+      await deleteProduct({ productId: deleteTarget.product._id })
+      toast.success("Product deleted.")
+      setDeleteTarget(null)
     } catch (error) {
-      setErrorMessage(getErrorMessage(error))
+      toast.error(getErrorMessage(error))
+    } finally {
+      setIsDeleting(false)
     }
   }
 
-  async function handleArchiveProduct(productId: ProductId) {
-    setErrorMessage(null)
-    setStatusMessage(null)
-
-    try {
-      await archiveProduct({ productId })
-      setStatusMessage("Product archived.")
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error))
-    }
-  }
-
-  async function handleUploadImage(file: File) {
+  async function handleUploadImages(files: Array<File>) {
     if (!productForm) {
       return
     }
 
     setIsUploading(true)
-    setErrorMessage(null)
-    setStatusMessage(null)
 
     try {
-      const assetFolder =
-        productForm.cloudinaryAssetFolder || currentCategory?.cloudinaryFolder
+      assertProductImageCapacity(productForm.images.length, files.length)
+      for (const file of files) {
+        assertProductImageFile(file)
+      }
+
       const uploadSignature = await createCloudinaryUploadSignature({
-        assetFolder: assetFolder ?? null,
+        productId: productForm.productId,
+        productAssetFolder: nullableText(productForm.cloudinaryAssetFolder),
       })
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("api_key", uploadSignature.apiKey)
-      formData.append("timestamp", String(uploadSignature.timestamp))
-      formData.append("signature", uploadSignature.signature)
 
-      if (uploadSignature.assetFolder) {
-        formData.append("asset_folder", uploadSignature.assetFolder)
-      }
+      const uploadedImages = await Promise.all(
+        files.map(async (file) => {
+          const uploadFile = await prepareProductImageForUpload(file)
 
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${uploadSignature.cloudName}/image/upload`,
-        {
-          method: "POST",
-          body: formData,
-        }
+          return uploadProductImageToCloudinary(uploadFile, uploadSignature)
+        })
       )
-      const payload: unknown = await response.json()
-
-      if (!response.ok || !isCloudinaryUploadResponse(payload)) {
-        throw new Error("Cloudinary upload failed.")
-      }
 
       setProductForm((current) =>
         current
           ? {
               ...current,
-              imageUrl: payload.secure_url,
-              cloudinaryPublicId: payload.public_id,
-              cloudinaryAssetFolder:
-                payload.asset_folder ??
-                payload.folder ??
-                uploadSignature.assetFolder ??
-                "",
+              images: [...current.images, ...uploadedImages],
+              cloudinaryAssetFolder: uploadSignature.assetFolder,
             }
           : current
       )
-      setStatusMessage("Image uploaded to Cloudinary.")
+      toast.success(
+        uploadedImages.length === 1
+          ? "Image uploaded to Cloudinary."
+          : `${uploadedImages.length} images uploaded to Cloudinary.`
+      )
     } catch (error) {
-      setErrorMessage(getErrorMessage(error))
+      toast.error(getErrorMessage(error))
     } finally {
       setIsUploading(false)
     }
@@ -587,23 +901,15 @@ export function AdminCatalogWorkspace({
         categories={categories}
         currentCategory={currentCategory}
         childCategories={childCategories}
-        products={leafProducts.map((record) => record.product)}
-        breadcrumbs={breadcrumbs}
-        title={currentCategory?.name ?? "Shop management"}
-        subtitle={
-          currentCategory
-            ? currentCategory.cloudinaryFolder
-            : "Manage the storefront exactly where customers browse it."
-        }
+        products={pageProductRecords.map((record) => record.product)}
+        title={currentCategory?.name}
         canAddProduct={canAddProduct}
-        errorMessage={errorMessage}
-        statusMessage={statusMessage}
         onAddCategory={() =>
           setCategoryForm(emptyCategoryForm(parentId, childCategories.length))
         }
         onAddProduct={() =>
           setProductForm(
-            emptyProductForm(parentId, templates, leafProducts.length)
+            emptyProductForm(parentId, templates, directProductRecords.length)
           )
         }
         onEditCategory={(category) =>
@@ -615,20 +921,29 @@ export function AdminCatalogWorkspace({
             isActive: category.isActive ?? true,
           })
         }
+        onDeleteCategory={(category) => {
+          setDeleteTarget({ type: "category", category })
+        }}
+        onToggleCategoryVisibility={(category) => {
+          void handleToggleCategoryVisibility(category)
+        }}
         onEditProduct={(product) => {
           const record = productRecordsById.get(product._id)
           if (record) {
             setProductForm(productRecordToForm(record))
           }
         }}
-        onArchiveProduct={(productId) => {
-          void handleArchiveProduct(productId)
+        onDeleteProduct={(product) => {
+          setDeleteTarget({ type: "product", product })
+        }}
+        onToggleProductVisibility={(product) => {
+          void handleToggleProductVisibility(product)
         }}
         onReorderCategories={(orderedCategoryIds) => {
           void handleReorderCategories(orderedCategoryIds)
         }}
-        onReorderProducts={(orderedProductIds) => {
-          void handleReorderProducts(orderedProductIds)
+        onReorderProducts={(productCategoryId, orderedProductIds) => {
+          void handleReorderProducts(productCategoryId, orderedProductIds)
         }}
       />
 
@@ -640,13 +955,289 @@ export function AdminCatalogWorkspace({
       <ProductDialog
         form={productForm}
         templates={templates}
-        selectedCategory={currentCategory}
+        assignableCategories={productAssignableCategories}
         isUploading={isUploading}
         onChange={setProductForm}
-        onUploadImage={handleUploadImage}
+        onUploadImages={handleUploadImages}
         onSubmit={handleSaveProduct}
       />
+      <DeleteConfirmationDialog
+        target={deleteTarget}
+        isDeleting={isDeleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          void handleConfirmDelete()
+        }}
+      />
     </>
+  )
+}
+
+export function AdminProductEditorDialog({
+  productId,
+  isOpen,
+  onOpenChange,
+  onSaved,
+}: {
+  productId: ProductId
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+  onSaved?: (nextSlug: string) => void
+}) {
+  const data = useQuery(api.shop.listAdmin)
+  const upsertProduct = useMutation(api.shop.upsertProduct)
+  const createCloudinaryUploadSignature = useAction(
+    api.cloudinary.createUploadSignature
+  )
+  const [productForm, setProductForm] = useState<ProductFormState | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+
+  const categories = data?.categories ?? []
+  const templates = data?.optionTemplates ?? []
+  const productRecords = data?.products ?? EMPTY_PRODUCT_RECORDS
+  const productRecord =
+    productRecords.find((record) => record.product._id === productId) ?? null
+  const currentCategory =
+    categories.find(
+      (category) => category._id === productRecord?.product.categoryId
+    ) ?? null
+  const childCategories = currentCategory
+    ? sortBySortOrder(
+        categories.filter(
+          (category) => category.parentId === currentCategory._id
+        )
+      )
+    : []
+  const productAssignableCategories = currentCategory
+    ? [currentCategory, ...childCategories]
+    : []
+
+  useEffect(() => {
+    if (!isOpen) {
+      setProductForm(null)
+      return
+    }
+
+    if (productForm !== null || !productRecord) {
+      return
+    }
+
+    setProductForm(productRecordToForm(productRecord))
+  }, [isOpen, productForm, productRecord])
+
+  function handleChangeProductForm(
+    value: React.SetStateAction<ProductFormState | null>
+  ) {
+    setProductForm((current) => {
+      const nextValue = typeof value === "function" ? value(current) : value
+
+      if (nextValue === null) {
+        onOpenChange(false)
+      }
+
+      return nextValue
+    })
+  }
+
+  async function handleSaveProduct(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!productForm?.categoryId) {
+      toast.error("Select a category before saving the product.")
+      return
+    }
+
+    try {
+      const productSortFallback = productRecords.filter(
+        (record) => record.product.categoryId === productForm.categoryId
+      ).length
+
+      await upsertProduct({
+        productId: productForm.productId,
+        categoryId: productForm.categoryId,
+        name: productForm.name,
+        description: productForm.description,
+        basePriceCents: priceInputToCents(productForm.basePrice),
+        currency: productForm.currency,
+        status: productForm.status,
+        sku: nullableText(productForm.sku),
+        cloudinaryAssetFolder: null,
+        sortOrder: parseSortOrder(productForm.sortOrder, productSortFallback),
+        images: productForm.images.map((image, index) => ({
+          imageId: image.imageId,
+          imageUrl: image.imageUrl,
+          cloudinaryPublicId: nullableText(image.cloudinaryPublicId),
+          cloudinaryAssetFolder: nullableText(image.cloudinaryAssetFolder),
+          sortOrder: index,
+        })),
+        options: buildOptionsFromTemplates(productForm, templates),
+        metadata: productForm.metadata.map((item, index) => ({
+          metadataId: item.metadataId,
+          label: item.label,
+          type: item.type,
+          value: item.value,
+          linkUrl: null,
+          showOnProductPage: item.showOnProductPage,
+          sortOrder: index,
+        })),
+      })
+      toast.success("Product saved.")
+      setProductForm(null)
+      onOpenChange(false)
+      onSaved?.(slugify(productForm.name))
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+    }
+  }
+
+  async function handleUploadImages(files: Array<File>) {
+    if (!productForm) {
+      return
+    }
+
+    setIsUploading(true)
+
+    try {
+      assertProductImageCapacity(productForm.images.length, files.length)
+      for (const file of files) {
+        assertProductImageFile(file)
+      }
+
+      const uploadSignature = await createCloudinaryUploadSignature({
+        productId: productForm.productId,
+        productAssetFolder: nullableText(productForm.cloudinaryAssetFolder),
+      })
+
+      const uploadedImages = await Promise.all(
+        files.map(async (file) => {
+          const uploadFile = await prepareProductImageForUpload(file)
+
+          return uploadProductImageToCloudinary(uploadFile, uploadSignature)
+        })
+      )
+
+      setProductForm((current) =>
+        current
+          ? {
+              ...current,
+              images: [...current.images, ...uploadedImages],
+              cloudinaryAssetFolder: uploadSignature.assetFolder,
+            }
+          : current
+      )
+      toast.success(
+        uploadedImages.length === 1
+          ? "Image uploaded to Cloudinary."
+          : `${uploadedImages.length} images uploaded to Cloudinary.`
+      )
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  return (
+    <ProductDialog
+      form={isOpen ? productForm : null}
+      templates={templates}
+      assignableCategories={productAssignableCategories}
+      isUploading={isUploading}
+      onChange={handleChangeProductForm}
+      onUploadImages={handleUploadImages}
+      onSubmit={handleSaveProduct}
+    />
+  )
+}
+
+function parentAdminHref(category: AdminCategory) {
+  const parentPath = category.path.split("/").slice(0, -1).join("/")
+
+  return parentPath ? `/admin/${parentPath}` : "/admin"
+}
+
+function DeleteConfirmationDialog({
+  target,
+  isDeleting,
+  onCancel,
+  onConfirm,
+}: {
+  target: DeleteTarget | null
+  isDeleting: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const isCategory = target?.type === "category"
+  const name =
+    target?.type === "category"
+      ? target.category.name
+      : (target?.product.name ?? "")
+
+  return (
+    <AlertDialog
+      open={target !== null}
+      onOpenChange={(open) => !open && !isDeleting && onCancel()}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Delete {isCategory ? "category" : "product"}?
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {isCategory
+              ? `This will hard delete "${name}", every sub-category, and all products stored under it from Convex and Cloudinary.`
+              : `This will hard delete "${name}" and its images, options, and metadata from Convex and Cloudinary.`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={isDeleting}
+            onClick={onConfirm}
+          >
+            <Trash2Icon />
+            {isDeleting ? "Deleting" : "Delete"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+function resolveCurrentCategory({
+  categories,
+  categoryId,
+  categoryPath,
+}: {
+  categories: Array<AdminCategory>
+  categoryId?: CategoryId
+  categoryPath?: string
+}) {
+  if (categoryId !== undefined) {
+    return categories.find((category) => category._id === categoryId) ?? null
+  }
+
+  if (categoryPath) {
+    return categories.find((category) => category.path === categoryPath) ?? null
+  }
+
+  return null
+}
+
+function AdminCategoryUnavailable({
+  categories,
+}: {
+  categories: Array<AdminCategory>
+}) {
+  return (
+    <ShopStorefront
+      mode="admin"
+      categories={categories}
+      childCategories={[]}
+      products={[]}
+      title="Category unavailable"
+      subtitle="This admin folder does not exist anymore."
+    />
   )
 }
 
@@ -726,21 +1317,6 @@ function CategoryDialog({
                 placeholder="Ligue 1"
               />
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.isActive}
-                onChange={(event) =>
-                  onChange((current) =>
-                    current
-                      ? { ...current, isActive: event.target.checked }
-                      : current
-                  )
-                }
-                className="size-4"
-              />
-              Visible in the store
-            </label>
             <DialogFooter>
               <Button type="submit">
                 <SaveIcon />
@@ -757,18 +1333,18 @@ function CategoryDialog({
 function ProductDialog({
   form,
   templates,
-  selectedCategory,
+  assignableCategories,
   isUploading,
   onChange,
-  onUploadImage,
+  onUploadImages,
   onSubmit,
 }: {
   form: ProductFormState | null
   templates: Array<AdminOptionTemplate>
-  selectedCategory: AdminCategory | null
+  assignableCategories: Array<AdminCategory>
   isUploading: boolean
   onChange: React.Dispatch<React.SetStateAction<ProductFormState | null>>
-  onUploadImage: (file: File) => Promise<void>
+  onUploadImages: (files: Array<File>) => Promise<void>
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>
 }) {
   return (
@@ -781,23 +1357,22 @@ function ProductDialog({
           <DialogTitle>
             {form?.productId ? "Edit product" : "Add product"}
           </DialogTitle>
-          <DialogDescription>
-            Product options come from Product settings. Activate only the
-            options this jersey supports.
-          </DialogDescription>
         </DialogHeader>
         {form && (
           <form
             className="space-y-6"
             onSubmit={(event) => void onSubmit(event)}
           >
-            <ProductBasicsForm form={form} onChange={onChange} />
+            <ProductBasicsForm
+              form={form}
+              assignableCategories={assignableCategories}
+              onChange={onChange}
+            />
             <CloudinaryImageForm
               form={form}
-              selectedCategory={selectedCategory}
               isUploading={isUploading}
               onChange={onChange}
-              onUploadImage={onUploadImage}
+              onUploadImages={onUploadImages}
             />
             <TemplateActivationForm
               form={form}
@@ -827,11 +1402,16 @@ function ProductDialog({
 
 function ProductBasicsForm({
   form,
+  assignableCategories,
   onChange,
 }: {
   form: ProductFormState
+  assignableCategories: Array<AdminCategory>
   onChange: React.Dispatch<React.SetStateAction<ProductFormState | null>>
 }) {
+  const currentCategory = assignableCategories[0]
+  const subCategories = assignableCategories.slice(1)
+
   return (
     <section className="grid gap-4 lg:grid-cols-2">
       <div className="space-y-2">
@@ -847,6 +1427,47 @@ function ProductBasicsForm({
           placeholder="PSG home jersey 2026"
         />
       </div>
+      {assignableCategories.length > 1 && (
+        <div className="space-y-2">
+          <Label htmlFor="product-category">Placement</Label>
+          <select
+            id="product-category"
+            value={form.categoryId ?? ""}
+            onChange={(event) => {
+              const selectedCategoryId = event.target.value
+
+              onChange((current) => {
+                const nextCategory = assignableCategories.find(
+                  (category) => category._id === selectedCategoryId
+                )
+
+                return current && nextCategory
+                  ? { ...current, categoryId: nextCategory._id }
+                  : current
+              })
+            }}
+            className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="" disabled>
+              Select a category
+            </option>
+            {currentCategory && (
+              <option value={currentCategory._id}>
+                {currentCategory.name}
+              </option>
+            )}
+            {subCategories.length > 0 && (
+              <optgroup label="Sub-categories">
+                {subCategories.map((category) => (
+                  <option key={category._id} value={category._id}>
+                    {category.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </div>
+      )}
       <div className="space-y-2">
         <Label htmlFor="product-price">Base price</Label>
         <Input
@@ -859,70 +1480,18 @@ function ProductBasicsForm({
           }
         />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label htmlFor="product-currency">Currency</Label>
-          <Input
-            id="product-currency"
-            value={form.currency}
-            onChange={(event) =>
-              onChange((current) =>
-                current
-                  ? { ...current, currency: event.target.value.toUpperCase() }
-                  : current
-              )
-            }
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="product-status">Status</Label>
-          <select
-            id="product-status"
-            value={form.status}
-            onChange={(event) =>
-              onChange((current) =>
-                current
-                  ? {
-                      ...current,
-                      status: productStatusFromValue(event.target.value),
-                    }
-                  : current
-              )
-            }
-            className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <option value="draft">Draft</option>
-            <option value="published">Published</option>
-            <option value="archived">Archived</option>
-          </select>
-        </div>
-      </div>
       <div className="space-y-2">
-        <Label htmlFor="product-sku">SKU</Label>
+        <Label htmlFor="product-currency">Currency</Label>
         <Input
-          id="product-sku"
-          value={form.sku}
-          onChange={(event) =>
-            onChange((current) =>
-              current ? { ...current, sku: event.target.value } : current
-            )
-          }
-          placeholder="PSG-HOME-2026"
-        />
-      </div>
-      <div className="space-y-2 lg:col-span-2">
-        <Label htmlFor="product-description">Description</Label>
-        <Textarea
-          id="product-description"
-          value={form.description}
+          id="product-currency"
+          value={form.currency}
           onChange={(event) =>
             onChange((current) =>
               current
-                ? { ...current, description: event.target.value }
+                ? { ...current, currency: event.target.value.toUpperCase() }
                 : current
             )
           }
-          placeholder="Match jersey with breathable knit and embroidered crest."
         />
       </div>
     </section>
@@ -931,112 +1500,203 @@ function ProductBasicsForm({
 
 function CloudinaryImageForm({
   form,
-  selectedCategory,
   isUploading,
   onChange,
-  onUploadImage,
+  onUploadImages,
 }: {
   form: ProductFormState
-  selectedCategory: AdminCategory | null
   isUploading: boolean
   onChange: React.Dispatch<React.SetStateAction<ProductFormState | null>>
-  onUploadImage: (file: File) => Promise<void>
+  onUploadImages: (files: Array<File>) => Promise<void>
 }) {
+  const draggedImageLocalIdRef = useRef<string | null>(null)
+
   return (
     <section className="rounded-lg border p-4">
       <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h3 className="font-medium">Image</h3>
-          <p className="text-sm text-muted-foreground">
-            Upload to the selected category folder or paste a Cloudinary CDN
-            URL.
-          </p>
+          <h3 className="font-medium">Images</h3>
         </div>
         <label className={buttonVariants({ variant: "outline", size: "sm" })}>
           <ImageUpIcon />
-          {isUploading ? "Uploading" : "Upload"}
+          {isUploading ? "Uploading" : "Upload images"}
           <input
             type="file"
-            aria-label="Upload product image"
-            accept="image/*"
+            aria-label="Upload product images"
+            accept={PRODUCT_IMAGE_ACCEPT}
             className="sr-only"
             disabled={isUploading}
+            multiple
             onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) {
-                void onUploadImage(file)
+              const files = Array.from(event.target.files ?? [])
+              if (files.length > 0) {
+                void onUploadImages(files)
               }
+              event.target.value = ""
             }}
           />
         </label>
       </div>
-      <div className="grid gap-4 lg:grid-cols-[180px_1fr]">
-        <div className="aspect-square overflow-hidden rounded-lg bg-muted">
-          {form.imageUrl ? (
-            <img
-              src={form.imageUrl}
-              alt=""
-              className="size-full object-cover"
-            />
-          ) : (
-            <div className="flex size-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
-              No image
-            </div>
-          )}
+      {form.images.length === 0 ? (
+        <div className="flex min-h-40 items-center justify-center rounded-lg bg-muted px-4 text-center text-sm text-muted-foreground">
+          No images
         </div>
-        <div className="grid gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="product-image-url">CDN URL</Label>
-            <Input
-              id="product-image-url"
-              value={form.imageUrl}
-              onChange={(event) =>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {form.images.map((image, index) => (
+            <div
+              key={image.localId}
+              draggable={!isUploading}
+              onDragStart={() => {
+                draggedImageLocalIdRef.current = image.localId
+              }}
+              onDragEnd={() => {
+                draggedImageLocalIdRef.current = null
+              }}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => {
+                const draggedImageLocalId = draggedImageLocalIdRef.current
+                if (!draggedImageLocalId) {
+                  return
+                }
+
                 onChange((current) =>
                   current
-                    ? { ...current, imageUrl: event.target.value }
+                    ? {
+                        ...current,
+                        images: moveProductImageBefore(
+                          current.images,
+                          draggedImageLocalId,
+                          image.localId
+                        ),
+                      }
                     : current
                 )
-              }
-              placeholder="https://res.cloudinary.com/..."
-            />
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="product-public-id">Public ID</Label>
-              <Input
-                id="product-public-id"
-                value={form.cloudinaryPublicId}
-                onChange={(event) =>
-                  onChange((current) =>
-                    current
-                      ? { ...current, cloudinaryPublicId: event.target.value }
-                      : current
-                  )
-                }
-              />
+                draggedImageLocalIdRef.current = null
+              }}
+              className="group rounded-lg border bg-background p-2"
+            >
+              <div className="relative aspect-square overflow-hidden rounded-md bg-muted">
+                <img
+                  src={image.imageUrl}
+                  alt=""
+                  className="size-full object-cover"
+                />
+                {index === 0 && (
+                  <Badge className="absolute top-2 left-2 shadow-sm">
+                    Primary
+                  </Badge>
+                )}
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <GripVerticalIcon className="size-3.5 shrink-0" />
+                  <span>{index + 1}</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <ProductImageOrderButton
+                    direction="up"
+                    disabled={index === 0}
+                    onClick={() =>
+                      onChange((current) =>
+                        current
+                          ? {
+                              ...current,
+                              images: moveProductImageByOffset(
+                                current.images,
+                                index,
+                                -1
+                              ),
+                            }
+                          : current
+                      )
+                    }
+                  />
+                  <ProductImageOrderButton
+                    direction="down"
+                    disabled={index === form.images.length - 1}
+                    onClick={() =>
+                      onChange((current) =>
+                        current
+                          ? {
+                              ...current,
+                              images: moveProductImageByOffset(
+                                current.images,
+                                index,
+                                1
+                              ),
+                            }
+                          : current
+                      )
+                    }
+                  />
+                  <ProductImageRemoveButton
+                    onClick={() =>
+                      onChange((current) =>
+                        current
+                          ? {
+                              ...current,
+                              images: current.images.filter(
+                                (currentImage) =>
+                                  currentImage.localId !== image.localId
+                              ),
+                            }
+                          : current
+                      )
+                    }
+                  />
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="product-asset-folder">Asset folder</Label>
-              <Input
-                id="product-asset-folder"
-                value={form.cloudinaryAssetFolder}
-                onChange={(event) =>
-                  onChange((current) =>
-                    current
-                      ? {
-                          ...current,
-                          cloudinaryAssetFolder: event.target.value,
-                        }
-                      : current
-                  )
-                }
-                placeholder={selectedCategory?.cloudinaryFolder}
-              />
-            </div>
-          </div>
+          ))}
         </div>
+      )}
+      <div className="mt-3 text-xs text-muted-foreground">
+        {form.images.length}/{MAX_PRODUCT_IMAGE_COUNT} images
       </div>
     </section>
+  )
+}
+
+function ProductImageOrderButton({
+  direction,
+  disabled,
+  onClick,
+}: {
+  direction: "up" | "down"
+  disabled: boolean
+  onClick: () => void
+}) {
+  const Icon = direction === "up" ? ArrowUpIcon : ArrowDownIcon
+  const label = direction === "up" ? "Move image up" : "Move image down"
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <Icon />
+    </Button>
+  )
+}
+
+function ProductImageRemoveButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      title="Remove image"
+      aria-label="Remove image"
+      onClick={onClick}
+    >
+      <Trash2Icon />
+    </Button>
   )
 }
 
@@ -1059,7 +1719,7 @@ function TemplateActivationForm({
         <div>
           <h3 className="font-medium">Product options</h3>
           <p className="text-sm text-muted-foreground">
-            Activate the shared options this jersey supports.
+            Activate the shared options this product supports.
           </p>
         </div>
         <Link
@@ -1077,6 +1737,7 @@ function TemplateActivationForm({
         <div className="grid gap-3 md:grid-cols-2">
           {activeTemplates.map((template) => {
             const checked = form.optionTemplateIds.includes(template._id)
+            const label = displayOptionLabel(template.label)
 
             return (
               <label
@@ -1085,6 +1746,7 @@ function TemplateActivationForm({
               >
                 <input
                   type="checkbox"
+                  aria-label={`Activate ${label}`}
                   checked={checked}
                   onChange={(event) =>
                     onChange((current) => {
@@ -1105,7 +1767,7 @@ function TemplateActivationForm({
                   className="mt-1 size-4"
                 />
                 <span>
-                  <span className="block font-medium">{template.label}</span>
+                  <span className="block font-medium">{label}</span>
                   <span className="mt-1 block text-muted-foreground">
                     {template.config.type === "choice"
                       ? template.config.choices
@@ -1136,8 +1798,7 @@ function ProductMetadataForm({
         <div>
           <h3 className="font-medium">Metadata</h3>
           <p className="text-sm text-muted-foreground">
-            Flexible product facts such as weight, season, material, or kit
-            number.
+            Flexible product facts and links shown on product pages.
           </p>
         </div>
         <Button
@@ -1150,11 +1811,10 @@ function ProductMetadataForm({
               {
                 localId: createLocalId("metadata"),
                 metadataId: null,
-                label: "Weight",
-                key: "weight",
+                label: "",
                 type: "text",
                 value: "",
-                sortOrder: String(metadata.length),
+                showOnProductPage: true,
               },
             ])
           }
@@ -1163,7 +1823,7 @@ function ProductMetadataForm({
           Add
         </Button>
       </div>
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         {metadata.length === 0 ? (
           <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
             No metadata fields yet.
@@ -1172,9 +1832,10 @@ function ProductMetadataForm({
           metadata.map((item, index) => (
             <div
               key={item.localId}
-              className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[1fr_1fr_120px_1fr_72px_auto]"
+              className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)_auto_auto] lg:items-center"
             >
               <Input
+                aria-label="Metadata label"
                 value={item.label}
                 placeholder="Label"
                 onChange={(event) =>
@@ -1183,43 +1844,37 @@ function ProductMetadataForm({
                   })
                 }
               />
-              <Input
-                value={item.key}
-                placeholder="key"
-                onChange={(event) =>
-                  updateMetadata(metadata, onChange, index, {
-                    key: event.target.value,
-                  })
-                }
-              />
               <select
+                aria-label="Metadata type"
                 value={item.type}
-                onChange={(event) =>
+                onChange={(event) => {
                   updateMetadata(metadata, onChange, index, {
                     type: metadataTypeFromValue(event.target.value),
                   })
-                }
+                }}
                 className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <option value="text">Text</option>
                 <option value="number">Number</option>
                 <option value="boolean">Boolean</option>
+                <option value="link">Link</option>
               </select>
               <Input
+                aria-label="Metadata value"
+                type={item.type === "link" ? "url" : "text"}
                 value={item.value}
-                placeholder="Value"
+                placeholder={item.type === "link" ? "https://..." : "Value"}
                 onChange={(event) =>
                   updateMetadata(metadata, onChange, index, {
                     value: event.target.value,
                   })
                 }
               />
-              <Input
-                type="number"
-                value={item.sortOrder}
-                onChange={(event) =>
+              <MetadataVisibilityButton
+                isVisible={item.showOnProductPage}
+                onClick={() =>
                   updateMetadata(metadata, onChange, index, {
-                    sortOrder: event.target.value,
+                    showOnProductPage: !item.showOnProductPage,
                   })
                 }
               />
@@ -1228,6 +1883,7 @@ function ProductMetadataForm({
                 variant="ghost"
                 size="icon-sm"
                 title="Remove metadata"
+                aria-label="Remove metadata"
                 onClick={() =>
                   onChange(
                     metadata.filter(
@@ -1243,6 +1899,33 @@ function ProductMetadataForm({
         )}
       </div>
     </section>
+  )
+}
+
+function MetadataVisibilityButton({
+  isVisible,
+  onClick,
+}: {
+  isVisible: boolean
+  onClick: () => void
+}) {
+  const Icon = isVisible ? EyeIcon : EyeOffIcon
+  const label = isVisible
+    ? "Hide metadata on product page"
+    : "Show metadata on product page"
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      title={label}
+      aria-label={label}
+      aria-pressed={isVisible}
+      onClick={onClick}
+    >
+      <Icon />
+    </Button>
   )
 }
 

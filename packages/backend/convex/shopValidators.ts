@@ -6,6 +6,33 @@ export const productStatusValidator = v.union(
   v.literal("archived")
 )
 
+export const checkoutOrderStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("open"),
+  v.literal("processing"),
+  v.literal("paid"),
+  v.literal("failed"),
+  v.literal("expired")
+)
+
+export const checkoutFulfillmentStatusValidator = v.union(
+  v.literal("unfulfilled"),
+  v.literal("preparing"),
+  v.literal("shipped"),
+  v.literal("delivered"),
+  v.literal("cancelled"),
+  v.literal("refunded")
+)
+
+export const checkoutShippingAddressValidator = v.object({
+  line1: v.union(v.string(), v.null()),
+  line2: v.union(v.string(), v.null()),
+  city: v.union(v.string(), v.null()),
+  state: v.union(v.string(), v.null()),
+  postalCode: v.union(v.string(), v.null()),
+  country: v.union(v.string(), v.null()),
+})
+
 export const optionFieldInputTypeValidator = v.union(
   v.literal("text"),
   v.literal("number")
@@ -38,12 +65,20 @@ export const productOptionConfigValidator = v.union(
 export const productMetadataTypeValidator = v.union(
   v.literal("text"),
   v.literal("number"),
-  v.literal("boolean")
+  v.literal("boolean"),
+  v.literal("link")
 )
 
 export const productOptionTemplateKindValidator = v.union(
   v.literal("choice"),
   v.literal("personalization")
+)
+
+export const cartConfigurationSummaryValidator = v.array(
+  v.object({
+    label: v.string(),
+    value: v.string(),
+  })
 )
 
 export const productOptionWriteValidator = v.object({
@@ -60,9 +95,19 @@ export const productOptionWriteValidator = v.object({
 export const productMetadataWriteValidator = v.object({
   metadataId: v.union(v.id("productMetadata"), v.null()),
   label: v.string(),
-  key: v.string(),
-  type: productMetadataTypeValidator,
+  key: v.optional(v.string()),
+  type: v.optional(productMetadataTypeValidator),
   value: v.string(),
+  linkUrl: v.optional(v.union(v.string(), v.null())),
+  showOnProductPage: v.optional(v.boolean()),
+  sortOrder: v.number(),
+})
+
+export const productImageWriteValidator = v.object({
+  imageId: v.union(v.id("productImages"), v.null()),
+  imageUrl: v.string(),
+  cloudinaryPublicId: v.union(v.string(), v.null()),
+  cloudinaryAssetFolder: v.union(v.string(), v.null()),
   sortOrder: v.number(),
 })
 

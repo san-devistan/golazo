@@ -72,6 +72,7 @@ function InputGroupAddon({
   )
 
   return (
+    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- The addon may contain buttons, so it cannot be a button itself.
     <div
       role="group"
       data-slot="input-group-addon"

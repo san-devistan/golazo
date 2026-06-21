@@ -9,17 +9,42 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AccountRouteImport } from './routes/account'
+import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as ProductsSlugRouteImport } from './routes/products.$slug'
+import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as CategoriesCategoryIdRouteImport } from './routes/categories.$categoryId'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
+import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
+import { Route as AdminSplatRouteImport } from './routes/admin.$'
+import { Route as ApiProductsImageBackgroundRouteImport } from './routes/api/products/image-background'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AdminProductsSlugRouteImport } from './routes/admin.products.$slug'
 import { Route as AdminCategoriesCategoryIdRouteImport } from './routes/admin.categories.$categoryId'
 
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SplatRoute = SplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -37,6 +62,11 @@ const ProductsSlugRoute = ProductsSlugRouteImport.update({
   path: '/products/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
+  id: '/checkout/success',
+  path: '/checkout/success',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CategoriesCategoryIdRoute = CategoriesCategoryIdRouteImport.update({
   id: '/categories/$categoryId',
   path: '/categories/$categoryId',
@@ -45,6 +75,37 @@ const CategoriesCategoryIdRoute = CategoriesCategoryIdRouteImport.update({
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminOrdersRoute = AdminOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminEmailsRoute = AdminEmailsRouteImport.update({
+  id: '/emails',
+  path: '/emails',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSplatRoute = AdminSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => AdminRoute,
+} as any)
+const ApiProductsImageBackgroundRoute =
+  ApiProductsImageBackgroundRouteImport.update({
+    id: '/api/products/image-background',
+    path: '/api/products/image-background',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminProductsSlugRoute = AdminProductsSlugRouteImport.update({
+  id: '/products/$slug',
+  path: '/products/$slug',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminCategoriesCategoryIdRoute =
@@ -56,74 +117,161 @@ const AdminCategoriesCategoryIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
+  '/account': typeof AccountRoute
   '/admin': typeof AdminRouteWithChildren
+  '/reset-password': typeof ResetPasswordRoute
+  '/admin/$': typeof AdminSplatRoute
+  '/admin/emails': typeof AdminEmailsRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/categories/$categoryId': typeof CategoriesCategoryIdRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
+  '/admin/products/$slug': typeof AdminProductsSlugRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/products/image-background': typeof ApiProductsImageBackgroundRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
+  '/account': typeof AccountRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/admin/$': typeof AdminSplatRoute
+  '/admin/emails': typeof AdminEmailsRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/categories/$categoryId': typeof CategoriesCategoryIdRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
+  '/admin/products/$slug': typeof AdminProductsSlugRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/products/image-background': typeof ApiProductsImageBackgroundRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
+  '/account': typeof AccountRoute
   '/admin': typeof AdminRouteWithChildren
+  '/reset-password': typeof ResetPasswordRoute
+  '/admin/$': typeof AdminSplatRoute
+  '/admin/emails': typeof AdminEmailsRoute
+  '/admin/orders': typeof AdminOrdersRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/categories/$categoryId': typeof CategoriesCategoryIdRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
+  '/admin/products/$slug': typeof AdminProductsSlugRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/products/image-background': typeof ApiProductsImageBackgroundRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/$'
+    | '/account'
     | '/admin'
+    | '/reset-password'
+    | '/admin/$'
+    | '/admin/emails'
+    | '/admin/orders'
     | '/admin/settings'
     | '/categories/$categoryId'
+    | '/checkout/success'
     | '/products/$slug'
     | '/admin/'
     | '/admin/categories/$categoryId'
+    | '/admin/products/$slug'
+    | '/api/auth/$'
+    | '/api/products/image-background'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/$'
+    | '/account'
+    | '/reset-password'
+    | '/admin/$'
+    | '/admin/emails'
+    | '/admin/orders'
     | '/admin/settings'
     | '/categories/$categoryId'
+    | '/checkout/success'
     | '/products/$slug'
     | '/admin'
     | '/admin/categories/$categoryId'
+    | '/admin/products/$slug'
+    | '/api/auth/$'
+    | '/api/products/image-background'
   id:
     | '__root__'
     | '/'
+    | '/$'
+    | '/account'
     | '/admin'
+    | '/reset-password'
+    | '/admin/$'
+    | '/admin/emails'
+    | '/admin/orders'
     | '/admin/settings'
     | '/categories/$categoryId'
+    | '/checkout/success'
     | '/products/$slug'
     | '/admin/'
     | '/admin/categories/$categoryId'
+    | '/admin/products/$slug'
+    | '/api/auth/$'
+    | '/api/products/image-background'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SplatRoute: typeof SplatRoute
+  AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRouteWithChildren
+  ResetPasswordRoute: typeof ResetPasswordRoute
   CategoriesCategoryIdRoute: typeof CategoriesCategoryIdRoute
+  CheckoutSuccessRoute: typeof CheckoutSuccessRoute
   ProductsSlugRoute: typeof ProductsSlugRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiProductsImageBackgroundRoute: typeof ApiProductsImageBackgroundRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin': {
       id: '/admin'
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$': {
+      id: '/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -147,6 +295,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/checkout/success': {
+      id: '/checkout/success'
+      path: '/checkout/success'
+      fullPath: '/checkout/success'
+      preLoaderRoute: typeof CheckoutSuccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/categories/$categoryId': {
       id: '/categories/$categoryId'
       path: '/categories/$categoryId'
@@ -161,6 +316,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/orders': {
+      id: '/admin/orders'
+      path: '/orders'
+      fullPath: '/admin/orders'
+      preLoaderRoute: typeof AdminOrdersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/emails': {
+      id: '/admin/emails'
+      path: '/emails'
+      fullPath: '/admin/emails'
+      preLoaderRoute: typeof AdminEmailsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/$': {
+      id: '/admin/$'
+      path: '/$'
+      fullPath: '/admin/$'
+      preLoaderRoute: typeof AdminSplatRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/api/products/image-background': {
+      id: '/api/products/image-background'
+      path: '/api/products/image-background'
+      fullPath: '/api/products/image-background'
+      preLoaderRoute: typeof ApiProductsImageBackgroundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/products/$slug': {
+      id: '/admin/products/$slug'
+      path: '/products/$slug'
+      fullPath: '/admin/products/$slug'
+      preLoaderRoute: typeof AdminProductsSlugRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/categories/$categoryId': {
       id: '/admin/categories/$categoryId'
       path: '/categories/$categoryId'
@@ -172,24 +369,38 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminSplatRoute: typeof AdminSplatRoute
+  AdminEmailsRoute: typeof AdminEmailsRoute
+  AdminOrdersRoute: typeof AdminOrdersRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminCategoriesCategoryIdRoute: typeof AdminCategoriesCategoryIdRoute
+  AdminProductsSlugRoute: typeof AdminProductsSlugRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminSplatRoute: AdminSplatRoute,
+  AdminEmailsRoute: AdminEmailsRoute,
+  AdminOrdersRoute: AdminOrdersRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminCategoriesCategoryIdRoute: AdminCategoriesCategoryIdRoute,
+  AdminProductsSlugRoute: AdminProductsSlugRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SplatRoute: SplatRoute,
+  AccountRoute: AccountRoute,
   AdminRoute: AdminRouteWithChildren,
+  ResetPasswordRoute: ResetPasswordRoute,
   CategoriesCategoryIdRoute: CategoriesCategoryIdRoute,
+  CheckoutSuccessRoute: CheckoutSuccessRoute,
   ProductsSlugRoute: ProductsSlugRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiProductsImageBackgroundRoute: ApiProductsImageBackgroundRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

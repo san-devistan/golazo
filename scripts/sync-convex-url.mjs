@@ -3,19 +3,36 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+const DEFAULT_WEB_SITE_URL = "http://localhost:3000"
 const SOURCE_ENV = path.join(ROOT, "packages/backend/.env.local")
-const TARGET_ENVS = [
+const TARGET_ENVS_BY_FILE = [
   {
     file: path.join(ROOT, "apps/web/.env.local"),
-    key: "VITE_CONVEX_URL",
+    vars: [
+      {
+        key: "VITE_CONVEX_URL",
+        sourceKey: "CONVEX_URL",
+      },
+      {
+        key: "VITE_CONVEX_SITE_URL",
+        sourceKey: "CONVEX_SITE_URL",
+      },
+      {
+        key: "VITE_SITE_URL",
+        value: DEFAULT_WEB_SITE_URL,
+      },
+    ],
   },
   {
     file: path.join(ROOT, "apps/mobile/.env.local"),
-    key: "EXPO_PUBLIC_CONVEX_URL",
+    vars: [
+      {
+        key: "EXPO_PUBLIC_CONVEX_URL",
+        sourceKey: "CONVEX_URL",
+      },
+    ],
   },
 ]
-
-const SOURCE_KEY = "CONVEX_URL"
 
 function relative(file) {
   return path.relative(ROOT, file)
@@ -111,19 +128,27 @@ async function readOptionalFile(file) {
 }
 
 const sourceContents = await readFile(SOURCE_ENV, "utf8")
-const convexUrl = getEnvValue(sourceContents, SOURCE_KEY)
-
-if (!convexUrl) {
-  throw new Error(`Missing ${SOURCE_KEY} in ${relative(SOURCE_ENV)}`)
-}
 
 await Promise.all(
-  TARGET_ENVS.map(async (target) => {
+  TARGET_ENVS_BY_FILE.map(async (target) => {
     const contents = await readOptionalFile(target.file)
-    const nextContents = upsertEnvValue(contents, target.key, convexUrl)
+    const nextContents = target.vars.reduce((currentContents, variable) => {
+      const value =
+        "value" in variable
+          ? variable.value
+          : getEnvValue(sourceContents, variable.sourceKey)
+
+      if (!value) {
+        throw new Error(
+          `Missing ${variable.sourceKey} in ${relative(SOURCE_ENV)}`
+        )
+      }
+
+      return upsertEnvValue(currentContents, variable.key, value)
+    }, contents)
 
     await mkdir(path.dirname(target.file), { recursive: true })
     await writeFile(target.file, nextContents)
-    console.log(`Synced ${target.key} in ${relative(target.file)}`)
+    console.log(`Synced ${relative(target.file)}`)
   })
 )

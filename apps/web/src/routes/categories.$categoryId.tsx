@@ -4,21 +4,27 @@ import {
   type StorefrontProduct,
 } from "@/components/shop-storefront"
 import { hasConvexUrl, sortBySortOrder } from "@/lib/shop"
+import { categoryPageQueryOptions, type CategoryId } from "@/lib/shop-queries"
+import { useSuspenseQuery } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 /* eslint-disable typescript/no-unsafe-type-assertion */
-import { api } from "@workspace/backend/api"
 import { buttonVariants } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
-import { useQuery } from "convex/react"
-import type { GenericId } from "convex/values"
 import { ArrowLeftIcon } from "lucide-react"
 import { useMemo } from "react"
 
 export const Route = createFileRoute("/categories/$categoryId")({
+  loader: async ({ params, context: { queryClient } }) => {
+    if (!hasConvexUrl()) {
+      return
+    }
+
+    await queryClient.ensureQueryData(
+      categoryPageQueryOptions(params.categoryId as CategoryId)
+    )
+  },
   component: CategoryPage,
 })
-
-type CategoryId = GenericId<"catalogCategories">
 
 const EMPTY_CATEGORIES: Array<StorefrontCategory> = []
 const EMPTY_PRODUCTS: Array<StorefrontProduct> = []
@@ -34,7 +40,7 @@ function CategoryPage() {
 }
 
 function CategoryLoader({ categoryId }: { categoryId: CategoryId }) {
-  const data = useQuery(api.shop.getCategoryPage, { categoryId })
+  const { data } = useSuspenseQuery(categoryPageQueryOptions(categoryId))
   const categories = data?.categories ?? EMPTY_CATEGORIES
   const products = data?.products ?? EMPTY_PRODUCTS
   const currentCategory = data?.currentCategory as
@@ -48,21 +54,6 @@ function CategoryLoader({ categoryId }: { categoryId: CategoryId }) {
       ),
     [categories, categoryId]
   )
-  const breadcrumbs = useMemo(() => {
-    if (!currentCategory) {
-      return []
-    }
-
-    const pathParts = currentCategory.path?.split("/") ?? []
-
-    return pathParts.flatMap((_, index) => {
-      const currentPath = pathParts.slice(0, index + 1).join("/")
-      const category = categories.find((item) => item.path === currentPath)
-
-      return category ? [category] : []
-    })
-  }, [categories, currentCategory])
-
   if (data === null) {
     return <UnavailableCategory />
   }
@@ -74,14 +65,7 @@ function CategoryLoader({ categoryId }: { categoryId: CategoryId }) {
       currentCategory={currentCategory}
       childCategories={children}
       products={products}
-      breadcrumbs={breadcrumbs}
-      title={data?.currentCategory.name ?? "Chargement"}
-      subtitle={
-        data
-          ? "Explore les sous-catégories ou retrouve les maillots disponibles dans cette sélection."
-          : "Chargement de la sélection."
-      }
-      isLoading={data === undefined}
+      title={data.currentCategory.name}
     />
   )
 }

@@ -9,7 +9,14 @@ import {
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import type { CSSProperties } from "react"
-import { Toaster as Sonner, type ToasterProps } from "sonner"
+import { Toaster as Sonner, toast, type ToasterProps } from "sonner"
+
+type ToasterStyle = CSSProperties & {
+  "--border-radius": string
+  "--normal-bg": string
+  "--normal-border": string
+  "--normal-text": string
+}
 
 const toasterIcons = {
   success: <CircleCheckIcon className="size-4" />,
@@ -19,12 +26,12 @@ const toasterIcons = {
   loading: <Loader2Icon className="size-4 animate-spin" />,
 }
 
-const toasterStyle = {
+const toasterStyle: ToasterStyle = {
   "--normal-bg": "var(--popover)",
   "--normal-text": "var(--popover-foreground)",
   "--normal-border": "var(--border)",
   "--border-radius": "var(--radius)",
-} satisfies CSSProperties
+}
 
 const toastOptions = {
   classNames: {
@@ -55,4 +62,4 @@ function toToasterTheme(theme: string | undefined): ToasterProps["theme"] {
   return "system"
 }
 
-export { Toaster }
+export { Toaster, toast }

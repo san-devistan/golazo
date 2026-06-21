@@ -12,13 +12,6 @@ args = ["-y", "convex@latest", "mcp", "start"]
 [mcp_servers.better-auth]
 url = "https://mcp.better-auth.com/mcp"
 
-[mcp_servers.resend]
-command = "npx"
-args = ["-y", "resend-mcp"]
-
-[mcp_servers.resend.env]
-RESEND_API_KEY = "re_xxxxxxxxx"
-
 [mcp_servers.stripe]
 url = "https://mcp.stripe.com"
 

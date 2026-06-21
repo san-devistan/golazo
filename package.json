@@ -14,12 +14,12 @@
   "devDependencies": {
     "oxc-minify": "^0.129.0",
     "oxc-parser": "^0.129.0",
-    "oxc-resolver": "^11.19.1",
+    "oxc-resolver": "^11.20.0",
     "oxc-transform": "^0.129.0",
     "oxfmt": "^0.48.0",
-    "oxlint": "^1.63.0",
+    "oxlint": "^1.68.0",
     "oxlint-tsgolint": "^0.22.1",
-    "turbo": "^2.9.12",
+    "turbo": "^2.9.16",
     "typescript": "5.9.3"
   },
   "engines": {

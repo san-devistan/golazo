@@ -25,6 +25,9 @@ const config = defineConfig({
   resolve: {
     extensions: [".tsx", ".ts", ".jsx", ".js", ".mjs", ".json"],
   },
+  ssr: {
+    noExternal: ["@convex-dev/better-auth"],
+  },
   build: {
     rollupOptions: {
       onwarn: handleRollupWarning,

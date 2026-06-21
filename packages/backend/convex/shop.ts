@@ -4,29 +4,46 @@ import { v, type Infer } from "convex/values"
 
 import type { Id } from "./_generated/dataModel.d.ts"
 import {
+  internalMutation,
+  internalQuery,
   mutation,
   query,
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server"
 import {
+  cloudinaryFolderForCatalogPath,
+  cloudinaryFolderForProductId,
+} from "./cloudinaryFolders"
+import {
+  productImageWriteValidator,
   productMetadataWriteValidator,
   productOptionWriteValidator,
   productOptionTemplateWriteValidator,
   productStatusValidator,
 } from "./shopValidators"
 
-const ROOT_CLOUDINARY_FOLDER = "golazo-shop"
+const DELETE_BATCH_SIZE = 200
+const CATEGORY_PAGE_CHILD_LIMIT = 60
+const CATEGORY_PAGE_PRODUCTS_PER_SECTION = 80
+const PRODUCT_IMAGE_LIMIT = 12
+const PRODUCT_STATUSES = ["draft", "published", "archived"] as const
 
+type ProductImageWrite = Infer<typeof productImageWriteValidator>
 type ProductOptionWrite = Infer<typeof productOptionWriteValidator>
 type ProductOptionConfig = ProductOptionWrite["config"]
 type ProductMetadataWrite = Infer<typeof productMetadataWriteValidator>
 type ProductOptionTemplateWrite = Infer<
   typeof productOptionTemplateWriteValidator
 >
+type ProductStatus = Infer<typeof productStatusValidator>
 type CategoryId = Id<"catalogCategories">
 type ProductId = Id<"products">
 type ProductOptionTemplateId = Id<"productOptionTemplates">
+type ProductDeletionPlan = {
+  cloudinaryPublicIds: Array<string>
+  cloudinaryAssetFolders: Array<string>
+}
 
 type CategoryDoc = {
   _id: CategoryId
@@ -74,6 +91,30 @@ function normalizeNullableText(value: string | null) {
   return nextValue ? nextValue : null
 }
 
+function normalizeMetadataLinkUrl(value: string | null | undefined) {
+  const linkText = normalizeNullableText(value ?? null)
+  if (linkText === null) {
+    return null
+  }
+
+  const urlText = /^[a-z][a-z0-9+.-]*:/i.test(linkText)
+    ? linkText
+    : `https://${linkText}`
+
+  let url: URL
+  try {
+    url = new URL(urlText)
+  } catch {
+    throw new Error("Metadata link must be a valid URL.")
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Metadata link must be an HTTP or HTTPS URL.")
+  }
+
+  return url.href
+}
+
 function normalizeSortOrder(value: number) {
   if (!Number.isInteger(value)) {
     throw new Error("Sort order must be an integer.")
@@ -105,6 +146,28 @@ function sortProductsByOrder<
   return sortedProducts
 }
 
+async function listPublishedProductsForCategories(
+  ctx: QueryCtx,
+  categoryIds: Array<CategoryId>
+) {
+  const productGroups = await Promise.all(
+    categoryIds
+      .slice(0, CATEGORY_PAGE_CHILD_LIMIT + 1)
+      .map(async (categoryId) => {
+        const products = await ctx.db
+          .query("products")
+          .withIndex("by_categoryId_and_status_and_sortOrder", (q) =>
+            q.eq("categoryId", categoryId).eq("status", "published")
+          )
+          .take(CATEGORY_PAGE_PRODUCTS_PER_SECTION)
+
+        return sortProductsByOrder(products)
+      })
+  )
+
+  return productGroups.flat()
+}
+
 function normalizePriceCents(label: string, value: number) {
   if (!Number.isInteger(value) || value < 0) {
     throw new Error(`${label} must be a non-negative integer amount in cents.`)
@@ -122,8 +185,19 @@ function normalizeCurrency(value: string) {
   return currency
 }
 
+function uniqueNonNullValues(values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      values.flatMap((value) => {
+        const nextValue = value?.trim() ?? ""
+        return nextValue ? [nextValue] : []
+      })
+    )
+  )
+}
+
 function cloudinaryFolderForPath(path: string) {
-  return `${ROOT_CLOUDINARY_FOLDER}/${path}`
+  return cloudinaryFolderForCatalogPath(path)
 }
 
 async function getCategoryOrThrow(
@@ -391,13 +465,150 @@ function normalizeTemplateInput(template: ProductOptionTemplateWrite) {
 }
 
 function normalizeMetadataInput(metadata: ProductMetadataWrite) {
+  const label = normalizeRequiredText("Metadata label", metadata.label)
+  const type = metadata.type ?? (metadata.linkUrl ? "link" : "text")
+  const value =
+    type === "link"
+      ? normalizeMetadataLinkUrl(metadata.value)
+      : normalizeRequiredText("Metadata value", metadata.value)
+
+  if (value === null) {
+    throw new Error("Metadata link is required.")
+  }
+
   return {
-    label: normalizeRequiredText("Metadata label", metadata.label),
-    key: slugify(metadata.key || metadata.label),
-    type: metadata.type,
-    value: normalizeRequiredText("Metadata value", metadata.value),
+    label,
+    key: slugify(metadata.key?.trim() || label),
+    type,
+    value,
+    linkUrl: null,
+    showOnProductPage: metadata.showOnProductPage ?? true,
     sortOrder: normalizeSortOrder(metadata.sortOrder),
   }
+}
+
+type NormalizedProductImage = {
+  imageUrl: string
+  cloudinaryPublicId: string | null
+  cloudinaryAssetFolder: string | null
+  sortOrder: number
+}
+
+type ProductFields = {
+  categoryId: CategoryId
+  name: string
+  slug: string
+  description: string
+  basePriceCents: number
+  currency: string
+  status: ProductStatus
+  sku: string | null
+  imageUrl: string | null
+  cloudinaryPublicId: string | null
+  cloudinaryAssetFolder: string | null
+  sortOrder: number
+  updatedAt: number
+}
+
+function normalizeProductImages(
+  images: Array<ProductImageWrite>,
+  fallbackAssetFolder: string | null
+) {
+  if (images.length > PRODUCT_IMAGE_LIMIT) {
+    throw new Error(`Products can have up to ${PRODUCT_IMAGE_LIMIT} images.`)
+  }
+
+  const dedupeKeys = new Set<string>()
+
+  return images.map((image) => {
+    const normalizedImage: NormalizedProductImage = {
+      imageUrl: normalizeRequiredText("Image URL", image.imageUrl),
+      cloudinaryPublicId: normalizeNullableText(image.cloudinaryPublicId),
+      cloudinaryAssetFolder:
+        normalizeNullableText(image.cloudinaryAssetFolder) ??
+        fallbackAssetFolder,
+      sortOrder: normalizeSortOrder(image.sortOrder),
+    }
+    const dedupeKey =
+      normalizedImage.cloudinaryPublicId ?? normalizedImage.imageUrl
+
+    if (dedupeKeys.has(dedupeKey)) {
+      throw new Error("Product images must be unique.")
+    }
+
+    dedupeKeys.add(dedupeKey)
+
+    return normalizedImage
+  })
+}
+
+function productAssetFolderForWrite({
+  productId,
+  cloudinaryAssetFolder,
+}: {
+  productId: ProductId | null
+  cloudinaryAssetFolder: string | null
+}) {
+  const existingFolder = normalizeNullableText(cloudinaryAssetFolder)
+
+  return (
+    existingFolder ??
+    (productId ? cloudinaryFolderForProductId(productId) : null)
+  )
+}
+
+function savedProductAssetFolder({
+  productId,
+  productAssetFolder,
+  primaryImage,
+}: {
+  productId: ProductId
+  productAssetFolder: string | null
+  primaryImage: NormalizedProductImage | null
+}) {
+  return (
+    productAssetFolder ??
+    primaryImage?.cloudinaryAssetFolder ??
+    cloudinaryFolderForProductId(productId)
+  )
+}
+
+async function saveProductDocument(
+  ctx: MutationCtx,
+  {
+    productId,
+    fields,
+    now,
+  }: {
+    productId: ProductId | null
+    fields: ProductFields
+    now: number
+  }
+) {
+  if (productId === null) {
+    return await ctx.db.insert("products", {
+      ...fields,
+      createdAt: now,
+    })
+  }
+
+  const existingProduct = await ctx.db.get(productId)
+  if (!existingProduct) {
+    throw new Error("Product not found.")
+  }
+
+  await ctx.db.patch(productId, fields)
+
+  return productId
+}
+
+async function listImagesForProduct(ctx: QueryCtx, productId: ProductId) {
+  return await ctx.db
+    .query("productImages")
+    .withIndex("by_productId_and_sortOrder", (q) =>
+      q.eq("productId", productId)
+    )
+    .take(PRODUCT_IMAGE_LIMIT)
 }
 
 async function listOptionsForProduct(ctx: QueryCtx, productId: ProductId) {
@@ -409,13 +620,23 @@ async function listOptionsForProduct(ctx: QueryCtx, productId: ProductId) {
     .take(100)
 }
 
-async function listMetadataForProduct(ctx: QueryCtx, productId: ProductId) {
-  return await ctx.db
+async function listMetadataForProduct(
+  ctx: QueryCtx,
+  productId: ProductId,
+  visibility: "all" | "productPage" = "all"
+) {
+  const metadata = await ctx.db
     .query("productMetadata")
     .withIndex("by_productId_and_sortOrder", (q) =>
       q.eq("productId", productId)
     )
     .take(100)
+
+  if (visibility === "productPage") {
+    return metadata.filter((item) => item.showOnProductPage ?? true)
+  }
+
+  return metadata
 }
 
 async function listOptionTemplates(ctx: QueryCtx) {
@@ -559,6 +780,238 @@ async function syncProductMetadata(
   }
 }
 
+async function syncProductImages({
+  ctx,
+  productId,
+  images,
+  normalizedImages,
+  now,
+}: {
+  ctx: MutationCtx
+  productId: ProductId
+  images: Array<ProductImageWrite>
+  normalizedImages: Array<NormalizedProductImage>
+  now: number
+}) {
+  const existingImages = await ctx.db
+    .query("productImages")
+    .withIndex("by_productId_and_sortOrder", (q) =>
+      q.eq("productId", productId)
+    )
+    .take(DELETE_BATCH_SIZE)
+  const retainedImageIds = new Set(
+    images.flatMap((image) => (image.imageId === null ? [] : [image.imageId]))
+  )
+
+  for (const existingImage of existingImages) {
+    if (!retainedImageIds.has(existingImage._id)) {
+      await ctx.db.delete(existingImage._id)
+    }
+  }
+
+  for (const [index, image] of images.entries()) {
+    const normalizedImage = normalizedImages[index]
+    if (!normalizedImage) {
+      continue
+    }
+
+    if (image.imageId === null) {
+      await ctx.db.insert("productImages", {
+        productId,
+        ...normalizedImage,
+        createdAt: now,
+        updatedAt: now,
+      })
+      continue
+    }
+
+    const existingImage = await ctx.db.get(image.imageId)
+    if (!existingImage || existingImage.productId !== productId) {
+      throw new Error("Image not found for this product.")
+    }
+
+    await ctx.db.patch(image.imageId, {
+      ...normalizedImage,
+      updatedAt: now,
+    })
+  }
+}
+
+async function getProductDeletionPlan(
+  ctx: QueryCtx,
+  productId: ProductId
+): Promise<ProductDeletionPlan> {
+  const product = await ctx.db.get(productId)
+  if (!product) {
+    throw new Error("Product not found.")
+  }
+
+  const images = await ctx.db
+    .query("productImages")
+    .withIndex("by_productId_and_sortOrder", (q) =>
+      q.eq("productId", productId)
+    )
+    .take(DELETE_BATCH_SIZE)
+
+  if (images.length === DELETE_BATCH_SIZE) {
+    throw new Error("This product has too many images to delete at once.")
+  }
+
+  return {
+    cloudinaryPublicIds: uniqueNonNullValues([
+      product.cloudinaryPublicId,
+      ...images.map((image) => image.cloudinaryPublicId),
+    ]),
+    cloudinaryAssetFolders: uniqueNonNullValues([
+      product.cloudinaryAssetFolder,
+      ...images.map((image) => image.cloudinaryAssetFolder),
+    ]),
+  }
+}
+
+async function getCategoryDeletionPlan(
+  ctx: QueryCtx,
+  categoryId: CategoryId
+): Promise<ProductDeletionPlan> {
+  const category = await ctx.db.get(categoryId)
+  if (!category) {
+    throw new Error("Category not found.")
+  }
+
+  const children = await ctx.db
+    .query("catalogCategories")
+    .withIndex("by_parentId_and_sortOrder", (q) => q.eq("parentId", categoryId))
+    .take(DELETE_BATCH_SIZE)
+
+  if (children.length === DELETE_BATCH_SIZE) {
+    throw new Error("This category has too many children to delete at once.")
+  }
+
+  const childPlans = []
+  for (const child of children) {
+    childPlans.push(await getCategoryDeletionPlan(ctx, child._id))
+  }
+
+  const productPlans = []
+  for (const status of PRODUCT_STATUSES) {
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_categoryId_and_status", (q) =>
+        q.eq("categoryId", categoryId).eq("status", status)
+      )
+      .take(DELETE_BATCH_SIZE)
+
+    if (products.length === DELETE_BATCH_SIZE) {
+      throw new Error("This category has too many products to delete at once.")
+    }
+
+    for (const product of products) {
+      productPlans.push(await getProductDeletionPlan(ctx, product._id))
+    }
+  }
+
+  return {
+    cloudinaryPublicIds: uniqueNonNullValues([
+      ...childPlans.flatMap((plan) => plan.cloudinaryPublicIds),
+      ...productPlans.flatMap((plan) => plan.cloudinaryPublicIds),
+    ]),
+    cloudinaryAssetFolders: uniqueNonNullValues([
+      category.cloudinaryFolder,
+      ...childPlans.flatMap((plan) => plan.cloudinaryAssetFolders),
+      ...productPlans.flatMap((plan) => plan.cloudinaryAssetFolders),
+    ]),
+  }
+}
+
+async function deleteProductWithRelations(
+  ctx: MutationCtx,
+  productId: ProductId
+) {
+  const images = await ctx.db
+    .query("productImages")
+    .withIndex("by_productId_and_sortOrder", (q) =>
+      q.eq("productId", productId)
+    )
+    .take(DELETE_BATCH_SIZE)
+  if (images.length === DELETE_BATCH_SIZE) {
+    throw new Error("This product has too many images to delete at once.")
+  }
+
+  const options = await ctx.db
+    .query("productOptions")
+    .withIndex("by_productId_and_sortOrder", (q) =>
+      q.eq("productId", productId)
+    )
+    .take(DELETE_BATCH_SIZE)
+  if (options.length === DELETE_BATCH_SIZE) {
+    throw new Error("This product has too many options to delete at once.")
+  }
+
+  const metadata = await ctx.db
+    .query("productMetadata")
+    .withIndex("by_productId_and_sortOrder", (q) =>
+      q.eq("productId", productId)
+    )
+    .take(DELETE_BATCH_SIZE)
+  if (metadata.length === DELETE_BATCH_SIZE) {
+    throw new Error("This product has too much metadata to delete at once.")
+  }
+
+  for (const image of images) {
+    await ctx.db.delete(image._id)
+  }
+
+  for (const option of options) {
+    await ctx.db.delete(option._id)
+  }
+
+  for (const item of metadata) {
+    await ctx.db.delete(item._id)
+  }
+
+  await ctx.db.delete(productId)
+}
+
+async function deleteProductsInCategory(
+  ctx: MutationCtx,
+  categoryId: CategoryId
+) {
+  for (const status of PRODUCT_STATUSES) {
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_categoryId_and_status", (q) =>
+        q.eq("categoryId", categoryId).eq("status", status)
+      )
+      .take(DELETE_BATCH_SIZE)
+
+    if (products.length === DELETE_BATCH_SIZE) {
+      throw new Error("This category has too many products to delete at once.")
+    }
+
+    for (const product of products) {
+      await deleteProductWithRelations(ctx, product._id)
+    }
+  }
+}
+
+async function deleteCategoryTree(ctx: MutationCtx, categoryId: CategoryId) {
+  const children = await ctx.db
+    .query("catalogCategories")
+    .withIndex("by_parentId_and_sortOrder", (q) => q.eq("parentId", categoryId))
+    .take(DELETE_BATCH_SIZE)
+
+  if (children.length === DELETE_BATCH_SIZE) {
+    throw new Error("This category has too many children to delete at once.")
+  }
+
+  for (const child of children) {
+    await deleteCategoryTree(ctx, child._id)
+  }
+
+  await deleteProductsInCategory(ctx, categoryId)
+  await ctx.db.delete(categoryId)
+}
+
 export const listCatalog = query({
   args: {},
   handler: async (ctx) => {
@@ -600,17 +1053,54 @@ export const getCategoryPage = query({
       .withIndex("by_path")
       .take(300)
     const activeCategories = categories.filter((category) => category.isActive)
-    const products = await ctx.db
-      .query("products")
-      .withIndex("by_categoryId_and_status_and_sortOrder", (q) =>
-        q.eq("categoryId", args.categoryId).eq("status", "published")
-      )
-      .take(120)
+    const childCategoryIds = activeCategories
+      .filter((category) => category.parentId === currentCategory._id)
+      .map((category) => category._id)
+    const products = await listPublishedProductsForCategories(ctx, [
+      currentCategory._id,
+      ...childCategoryIds,
+    ])
 
     return {
       currentCategory,
       categories: activeCategories,
-      products: sortProductsByOrder(products),
+      products,
+    }
+  },
+})
+
+export const getCategoryPageByPath = query({
+  args: {
+    path: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const path = normalizeRequiredText("Category path", args.path)
+    const currentCategory = await ctx.db
+      .query("catalogCategories")
+      .withIndex("by_path", (q) => q.eq("path", path))
+      .unique()
+
+    if (!currentCategory?.isActive) {
+      return null
+    }
+
+    const categories = await ctx.db
+      .query("catalogCategories")
+      .withIndex("by_path")
+      .take(300)
+    const activeCategories = categories.filter((category) => category.isActive)
+    const childCategoryIds = activeCategories
+      .filter((category) => category.parentId === currentCategory._id)
+      .map((category) => category._id)
+    const products = await listPublishedProductsForCategories(ctx, [
+      currentCategory._id,
+      ...childCategoryIds,
+    ])
+
+    return {
+      currentCategory,
+      categories: activeCategories,
+      products,
     }
   },
 })
@@ -643,8 +1133,94 @@ export const getProduct = query({
       product,
       category,
       categories: categories.filter((item) => item.isActive),
+      images: await listImagesForProduct(ctx, product._id),
+      options: await listOptionsForProduct(ctx, product._id),
+      metadata: await listMetadataForProduct(ctx, product._id, "productPage"),
+    }
+  },
+})
+
+export const getAdminProduct = query({
+  args: {
+    slug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const slug = normalizeRequiredText("Product slug", args.slug)
+    const product = await ctx.db
+      .query("products")
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
+      .unique()
+
+    if (!product) {
+      return null
+    }
+
+    const category = await ctx.db.get(product.categoryId)
+    if (!category) {
+      return null
+    }
+
+    const categories = await ctx.db
+      .query("catalogCategories")
+      .withIndex("by_path")
+      .take(300)
+
+    return {
+      product,
+      category,
+      categories,
+      images: await listImagesForProduct(ctx, product._id),
       options: await listOptionsForProduct(ctx, product._id),
       metadata: await listMetadataForProduct(ctx, product._id),
+    }
+  },
+})
+
+export const getProductInCategoryPath = query({
+  args: {
+    categoryPath: v.string(),
+    productSlug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const categoryPath = normalizeRequiredText(
+      "Category path",
+      args.categoryPath
+    )
+    const productSlug = normalizeRequiredText("Product slug", args.productSlug)
+    const category = await ctx.db
+      .query("catalogCategories")
+      .withIndex("by_path", (q) => q.eq("path", categoryPath))
+      .unique()
+
+    if (!category?.isActive) {
+      return null
+    }
+
+    const product = await ctx.db
+      .query("products")
+      .withIndex("by_slug", (q) => q.eq("slug", productSlug))
+      .unique()
+
+    if (
+      !product ||
+      product.status !== "published" ||
+      product.categoryId !== category._id
+    ) {
+      return null
+    }
+
+    const categories = await ctx.db
+      .query("catalogCategories")
+      .withIndex("by_path")
+      .take(300)
+
+    return {
+      product,
+      category,
+      categories: categories.filter((item) => item.isActive),
+      images: await listImagesForProduct(ctx, product._id),
+      options: await listOptionsForProduct(ctx, product._id),
+      metadata: await listMetadataForProduct(ctx, product._id, "productPage"),
     }
   },
 })
@@ -668,6 +1244,7 @@ export const listAdmin = query({
       products: await Promise.all(
         products.map(async (product) => ({
           product,
+          images: await listImagesForProduct(ctx, product._id),
           options: await listOptionsForProduct(ctx, product._id),
           metadata: await listMetadataForProduct(ctx, product._id),
         }))
@@ -799,6 +1376,23 @@ export const upsertCategory = mutation({
   },
 })
 
+export const setCategoryVisibility = mutation({
+  args: {
+    categoryId: v.id("catalogCategories"),
+    isActive: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    await getCategoryOrThrow(ctx, args.categoryId)
+
+    await ctx.db.patch(args.categoryId, {
+      isActive: args.isActive,
+      updatedAt: Date.now(),
+    })
+
+    return null
+  },
+})
+
 export const upsertProduct = mutation({
   args: {
     productId: v.union(v.id("products"), v.null()),
@@ -809,16 +1403,15 @@ export const upsertProduct = mutation({
     currency: v.string(),
     status: productStatusValidator,
     sku: v.union(v.string(), v.null()),
-    imageUrl: v.union(v.string(), v.null()),
-    cloudinaryPublicId: v.union(v.string(), v.null()),
     cloudinaryAssetFolder: v.union(v.string(), v.null()),
     sortOrder: v.number(),
+    images: v.array(productImageWriteValidator),
     options: v.array(productOptionWriteValidator),
     metadata: v.array(productMetadataWriteValidator),
   },
   handler: async (ctx, args) => {
     const now = Date.now()
-    const category = await getCategoryOrThrow(ctx, args.categoryId)
+    await getCategoryOrThrow(ctx, args.categoryId)
     const name = normalizeRequiredText("Product name", args.name)
     const slug = slugify(name)
     const duplicateProduct = await ctx.db
@@ -830,6 +1423,15 @@ export const upsertProduct = mutation({
       throw new Error("A product with this name already exists.")
     }
 
+    const productAssetFolder = productAssetFolderForWrite({
+      productId: args.productId,
+      cloudinaryAssetFolder: args.cloudinaryAssetFolder,
+    })
+    const productImages = normalizeProductImages(
+      args.images,
+      productAssetFolder
+    )
+    const primaryImage = productImages[0] ?? null
     const productFields = {
       categoryId: args.categoryId,
       name,
@@ -839,32 +1441,35 @@ export const upsertProduct = mutation({
       currency: normalizeCurrency(args.currency),
       status: args.status,
       sku: normalizeNullableText(args.sku),
-      imageUrl: normalizeNullableText(args.imageUrl),
-      cloudinaryPublicId: normalizeNullableText(args.cloudinaryPublicId),
+      imageUrl: primaryImage?.imageUrl ?? null,
+      cloudinaryPublicId: primaryImage?.cloudinaryPublicId ?? null,
       cloudinaryAssetFolder:
-        normalizeNullableText(args.cloudinaryAssetFolder) ??
-        category.cloudinaryFolder,
+        productAssetFolder ?? primaryImage?.cloudinaryAssetFolder ?? null,
       sortOrder: normalizeSortOrder(args.sortOrder),
       updatedAt: now,
     }
 
-    const productId =
-      args.productId === null
-        ? await ctx.db.insert("products", {
-            ...productFields,
-            createdAt: now,
-          })
-        : args.productId
+    const productId = await saveProductDocument(ctx, {
+      productId: args.productId,
+      fields: productFields,
+      now,
+    })
+    await ctx.db.patch(productId, {
+      cloudinaryAssetFolder: savedProductAssetFolder({
+        productId,
+        productAssetFolder,
+        primaryImage,
+      }),
+      updatedAt: now,
+    })
 
-    if (args.productId !== null) {
-      const existingProduct = await ctx.db.get(args.productId)
-      if (!existingProduct) {
-        throw new Error("Product not found.")
-      }
-
-      await ctx.db.patch(args.productId, productFields)
-    }
-
+    await syncProductImages({
+      ctx,
+      productId,
+      images: args.images,
+      normalizedImages: productImages,
+      now,
+    })
     await syncProductOptions(ctx, productId, args.options, now)
     await syncProductMetadata(ctx, productId, args.metadata, now)
 
@@ -920,6 +1525,26 @@ export const reorderProducts = mutation({
   },
 })
 
+export const setProductVisibility = mutation({
+  args: {
+    productId: v.id("products"),
+    status: v.union(v.literal("draft"), v.literal("published")),
+  },
+  handler: async (ctx, args) => {
+    const product = await ctx.db.get(args.productId)
+    if (!product) {
+      throw new Error("Product not found.")
+    }
+
+    await ctx.db.patch(args.productId, {
+      status: args.status,
+      updatedAt: Date.now(),
+    })
+
+    return null
+  },
+})
+
 export const archiveProduct = mutation({
   args: {
     productId: v.id("products"),
@@ -934,6 +1559,52 @@ export const archiveProduct = mutation({
       status: "archived",
       updatedAt: Date.now(),
     })
+
+    return null
+  },
+})
+
+export const getProductCloudinaryDeletionPlan = internalQuery({
+  args: {
+    productId: v.id("products"),
+  },
+  handler: async (ctx, args) => {
+    return await getProductDeletionPlan(ctx, args.productId)
+  },
+})
+
+export const getCategoryCloudinaryDeletionPlan = internalQuery({
+  args: {
+    categoryId: v.id("catalogCategories"),
+  },
+  handler: async (ctx, args) => {
+    return await getCategoryDeletionPlan(ctx, args.categoryId)
+  },
+})
+
+export const deleteProductRecord = internalMutation({
+  args: {
+    productId: v.id("products"),
+  },
+  handler: async (ctx, args) => {
+    const product = await ctx.db.get(args.productId)
+    if (!product) {
+      throw new Error("Product not found.")
+    }
+
+    await deleteProductWithRelations(ctx, args.productId)
+
+    return null
+  },
+})
+
+export const deleteCategoryRecord = internalMutation({
+  args: {
+    categoryId: v.id("catalogCategories"),
+  },
+  handler: async (ctx, args) => {
+    await getCategoryOrThrow(ctx, args.categoryId)
+    await deleteCategoryTree(ctx, args.categoryId)
 
     return null
   },
