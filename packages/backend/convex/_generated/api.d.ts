@@ -22,6 +22,7 @@ import type * as orderEmails from "../orderEmails.js";
 import type * as orders from "../orders.js";
 import type * as shop from "../shop.js";
 import type * as shopValidators from "../shopValidators.js";
+import type * as stripeAllowedCountries from "../stripeAllowedCountries.js";
 
 import type {
   ApiFromModules,
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   orders: typeof orders;
   shop: typeof shop;
   shopValidators: typeof shopValidators;
+  stripeAllowedCountries: typeof stripeAllowedCountries;
 }>;
 
 /**

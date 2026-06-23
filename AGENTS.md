@@ -7,54 +7,20 @@ before introducing new patterns.
 
 | Area          | Path               | Stack                                                                                           | Notes                                                                                                      |
 | ------------- | ------------------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Web app       | `apps/web`         | TanStack Start, React 19, TanStack Router, TanStack Query, Tailwind CSS v4, Vite, Convex client | Uses shared web UI from `@workspace/ui`.                                                                   |
-| Mobile app    | `apps/mobile`      | Expo Router, React Native, NativeWind, React Native Reusables, Convex client                    | Owns native UI components in `components/ui`, derived from the shared web design system.                   |
+| Web app       | `apps/web`         | TanStack Start, React 19, TanStack Router, TanStack Query, Tailwind CSS v4, Vite, Convex client | Uses shared web UI from `@workspace/ui`; owns routes, SSR, Cloudinary usage, and web media workflows.      |
 | Backend       | `packages/backend` | Convex                                                                                          | Owns Convex schema, functions, generated API exports, auth, email, billing, and backend integration logic. |
 | Web UI system | `packages/ui`      | React 19, shadcn-style components, Tailwind CSS v4, Base UI, lucide-react, `usehooks-ts`        | Source of truth for the web design system and design tokens.                                               |
 | Automation    | `scripts`          | Shell and explicit Node.js scripts                                                              | JavaScript is allowed here for repo tooling.                                                               |
 
 ## Design System Ownership
 
-`packages/ui` defines the canonical web design system. Treat
-`packages/ui/src/styles/globals.css` and `packages/ui/src/components` as the
-source of truth for tokens, component anatomy, variants, naming, and interaction
-patterns.
+`packages/ui` owns the canonical web design system, web tokens, and shadcn-style
+components. `apps/web` consumes those components through `@workspace/ui`.
 
-When building UI in `apps/web`, compose screens from the existing components in
-`packages/ui/src/components` through the `@workspace/ui` exports first. Inspect
-the available component APIs, variants, and composition patterns before creating
-new app-local UI. Do not introduce new web components, wrappers, or interface
-patterns when the existing design-system components can be composed to satisfy
-the need.
+For implementation details, read the local workspace guide before editing UI:
 
-The mobile app does not directly reuse web React components. Instead,
-`apps/mobile/components/ui` implements native components with React Native
-Reusables and `@rn-primitives`, while matching the web design system's tokens,
-variants, and component behavior where native constraints allow.
-
-When building UI in `apps/mobile`, compose screens from
-`apps/mobile/components/ui` first. Verify that the native UI components,
-variants, and `@rn-primitives` composition patterns cannot cover the requirement
-before adding a new mobile component or interface pattern.
-
-Across web and mobile, prefer composing existing primitives to the maximum
-reasonable extent. Add a new component only when it represents a genuinely new
-reusable primitive, platform-specific behavior, or feature-owned composition
-that cannot be expressed cleanly with the current component set.
-
-Mobile theme files are generated from the web token source:
-
-- Source: `packages/ui/src/styles/globals.css`
-- Generated: `apps/mobile/global.css`
-- Generated: `apps/mobile/lib/theme.ts`
-- Sync command: `pnpm sync:mobile-theme`
-
-This sync translates theme colors; font changes still need a platform migration
-from web `@fontsource-variable/*` packages to matching mobile
-`@expo-google-fonts/*` packages.
-
-Do not hand-edit generated mobile theme files. Change the token source in
-`packages/ui`, then sync the mobile theme.
+- Web app: `apps/web/AGENTS.md`
+- Web UI system: `packages/ui/AGENTS.md`
 
 ## File Naming
 
@@ -80,10 +46,9 @@ Within a workflow, domain, or module folder, split by role only when there are
 enough files to justify it:
 
 - `_components/` contains UI implementation private to that workflow or domain.
-- `_hooks/` contains React or React Native hooks private to that workflow or
-  domain.
+- `_hooks/` contains React hooks private to that workflow or domain.
 - `_lib/` contains state, actions, controllers, adapters, and domain logic.
-- `_pages/` contains page-level compositions used by routes or screens.
+- `_pages/` contains page-level compositions used by routes.
 - `_types/` contains shared types when they are large enough to deserve their
   own file.
 - `_utils/` is a last resort for small pure helpers genuinely reused inside that
@@ -121,34 +86,45 @@ being touched first, then add cross-cutting skills for the specific technology
 or concern. If multiple rows match, use the smallest useful set and read them in
 the order listed.
 
-For backend-owned features, read `packages/backend/AGENTS.md` first and then use
-the backend-local skills in `packages/backend/.agents/skills`.
+When launching an agent from the repository root, route to the local workspace
+guide first. Do not assume workspace-local skills are globally available by name.
 
-| Scope / workspace                    | Invoke when                                                                               | Primary skills                                                                                                                                                    |
-| ------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`                           | Routes, loaders, SSR, server functions, web data flow, or TanStack wiring                 | `tanstack-start-best-practices`, `tanstack-router-best-practices`, `tanstack-query-best-practices`, `tanstack-integration-best-practices`, `native-data-fetching` |
-| `apps/web`, `packages/ui`            | Global web UI, styling, design review, shadcn-style components, web tokens                | `frontend-design`, `web-design-guidelines`, `shadcn`, `vercel-react-best-practices`                                                                               |
-| `packages/ui`, shared React packages | Shared React component APIs, composition patterns, compound components, render props      | `vercel-composition-patterns`, `shadcn`                                                                                                                           |
-| React web TypeScript workspaces      | Browser/SSR-safe React hooks, storage, media queries, observers, timers, DOM events       | `usehooks-ts`, plus the workspace-specific React skills for the area being changed.                                                                               |
-| `apps/mobile`                        | Screens, navigation, native UI, NativeWind, React Native Reusables                        | `building-native-ui`, `vercel-react-native-skills`, `react-native-reusables`, `expo-tailwind-setup`                                                               |
-| `apps/mobile`                        | Builds, releases, native modules, Expo upgrades, native/web interop                       | `expo-dev-client`, `expo-deployment`, `upgrading-expo`, `expo-module`, `Expo UI SwiftUI`, `use-dom`                                                               |
-| `packages/backend`                   | Convex schema, functions, generated API exports, and backend integrations                 | `packages/backend/AGENTS.md`, then the needed backend-local Convex skills in `packages/backend/.agents/skills/`.                                                  |
-| `packages/backend`                   | Better Auth integration, auth models, sessions, middleware, or auth config                | `packages/backend/AGENTS.md`, `convex-dev-better-auth`, and the backend-local Better Auth skills in `packages/backend/.agents/skills/`.                           |
-| `packages/backend`                   | Transactional email, Resend provider setup, templates, or email delivery                  | `packages/backend/AGENTS.md`, `convex-dev-resend`, and the backend-local Resend/email skills in `packages/backend/.agents/skills/`.                               |
-| `packages/backend`                   | Stripe billing, checkout, webhooks, subscriptions, invoices, or entitlements              | `packages/backend/AGENTS.md`, `convex-dev-stripe`, and the backend-local Stripe skills in `packages/backend/.agents/skills/`.                                     |
-| Any TypeScript workspace             | Nontrivial Effect services, Layers, typed errors, Config, Schema, runtime, or tests       | `effect-ts`, plus the package-specific skills for the workspace being changed.                                                                                    |
-| Any TypeScript workspace             | Type modeling, explicit errors, module APIs, refactors, boundaries, or TS maintainability | `typescript-code-quality`, plus the package-specific skills for the workspace being changed.                                                                      |
-| Root, `scripts`, workspace config    | Monorepo structure, package boundaries, Turbo tasks, caching, or repo tooling             | `turborepo`, `improve-codebase-architecture`                                                                                                                      |
+| Scope / workspace                 | Read first                   | Local skill families                                              |
+| --------------------------------- | ---------------------------- | ----------------------------------------------------------------- |
+| `apps/web`                        | `apps/web/AGENTS.md`         | TanStack Start, Router, Query, React performance, Cloudinary      |
+| `packages/backend`                | `packages/backend/AGENTS.md` | Convex, Better Auth, Resend/email, Stripe                         |
+| `packages/ui`                     | `packages/ui/AGENTS.md`      | shadcn, web design tokens, shared React components, UI primitives |
+| Root, `scripts`, workspace config | this file                    | Turborepo, package boundaries, repo tooling                       |
+
+For TypeScript code, prefer the project-standard packages that encode safer
+patterns instead of hand-written equivalents:
+
+- Use `effect-ts` for typed async workflows, service dependencies, structured
+  errors, schemas, config, retries, resource handling, and concurrency. Prefer
+  Effect composition over scattered `try`/`catch`, nullable error state, ad hoc
+  dependency wiring, or bespoke validation in nontrivial logic.
+- Use `usehooks-ts` for common browser and React hook concerns such as storage,
+  media queries, events, debounce/throttle, timers, observers, clipboard, dark
+  mode, scroll lock, and mounted/client checks. Prefer its SSR-safe hooks over
+  handwritten `useEffect` wrappers unless the behavior is genuinely
+  domain-specific or unsupported.
+
+Keep trivial synchronous code simple; do not force these packages into places
+where they add ceremony without reducing risk or duplication.
 
 ## Available MCPs
 
-| MCP         | Use for                                                                                                    |
-| ----------- | ---------------------------------------------------------------------------------------------------------- |
-| Convex      | Inspect deployments, tables, function specs, logs, environment variables, and run Convex functions.        |
-| Better Auth | Inspect Better Auth docs and integration guidance for backend auth work.                                   |
-| Stripe      | Inspect Stripe docs and resources for backend billing and payment work.                                    |
-| shadcn      | Search registries, inspect component examples, and get add commands for shadcn components.                 |
-| Vercel      | Inspect projects, deployments, runtime/build logs, toolbar comments, domains, and deployment access links. |
+| MCP                   | Use for                                                                                                    |
+| --------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Convex                | Inspect deployments, tables, function specs, logs, environment variables, and run Convex functions.        |
+| Better Auth           | Inspect Better Auth docs and integration guidance for backend auth work.                                   |
+| Stripe                | Inspect Stripe docs and resources for backend billing and payment work.                                    |
+| shadcn                | Search registries, inspect component examples, and get add commands for shadcn components.                 |
+| Vercel                | Inspect projects, deployments, runtime/build logs, toolbar comments, domains, and deployment access links. |
+| Cloudinary asset mgmt | Inspect and manage Cloudinary assets for web media work.                                                   |
+| Cloudinary env config | Inspect Cloudinary environment and configuration resources.                                                |
+| Cloudinary metadata   | Work with Cloudinary structured metadata.                                                                  |
+| Cloudinary analysis   | Analyze Cloudinary assets and media usage.                                                                 |
 
 ## Operating Notes
 
