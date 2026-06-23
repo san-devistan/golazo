@@ -34,11 +34,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog"
-import { Button, buttonVariants } from "@workspace/ui/components/button"
+import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Separator } from "@workspace/ui/components/separator"
-import { toast } from "@workspace/ui/components/sonner"
+import { buttonVariants } from "@workspace/ui/lib/button-variants"
+import { toast } from "@workspace/ui/lib/toast"
 import { cn } from "@workspace/ui/lib/utils"
 import { useAction } from "convex/react"
 import type { GenericId } from "convex/values"
@@ -50,7 +51,7 @@ import {
   ShoppingCartIcon,
   Trash2Icon,
 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { type SetStateAction, useMemo, useReducer } from "react"
 
 export const Route = createFileRoute("/products/$slug")({
   validateSearch: validateProductSearch,
@@ -162,6 +163,46 @@ type ProductConfigurationState = {
   fieldValues: Record<string, Record<string, string>>
 }
 
+type ProductConfiguratorState = {
+  actionErrorMessage: string | null
+  configuration: ProductConfigurationState
+  isDeleteDialogOpen: boolean
+  isDeleting: boolean
+  isEditDialogOpen: boolean
+  quantity: number
+  selectedImageIndex: number
+}
+
+type ProductConfiguratorAction =
+  | {
+      type: "setConfiguration"
+      value: SetStateAction<ProductConfigurationState>
+    }
+  | {
+      type: "setSelectedImageIndex"
+      value: SetStateAction<number>
+    }
+  | {
+      type: "setQuantity"
+      value: SetStateAction<number>
+    }
+  | {
+      type: "setIsEditDialogOpen"
+      value: SetStateAction<boolean>
+    }
+  | {
+      type: "setIsDeleteDialogOpen"
+      value: SetStateAction<boolean>
+    }
+  | {
+      type: "setIsDeleting"
+      value: SetStateAction<boolean>
+    }
+  | {
+      type: "setActionErrorMessage"
+      value: SetStateAction<string | null>
+    }
+
 type ChoiceProductOption = ProductOption & { config: ChoiceConfig }
 type PersonalizationProductOption = ProductOption & {
   config: PersonalizationConfig
@@ -200,6 +241,94 @@ function createInitialConfiguration(
     choiceValues,
     enabledOptions,
     fieldValues: {},
+  }
+}
+
+function createInitialProductConfiguratorState(
+  detail: ProductDetail
+): ProductConfiguratorState {
+  return {
+    actionErrorMessage: null,
+    configuration: createInitialConfiguration(detail),
+    isDeleteDialogOpen: false,
+    isDeleting: false,
+    isEditDialogOpen: false,
+    quantity: 1,
+    selectedImageIndex: 0,
+  }
+}
+
+function isStateUpdater<T>(
+  value: SetStateAction<T>
+): value is (current: T) => T {
+  return typeof value === "function"
+}
+
+function resolveStateAction<T>(value: SetStateAction<T>, current: T): T {
+  return isStateUpdater(value) ? value(current) : value
+}
+
+function productConfiguratorReducer(
+  state: ProductConfiguratorState,
+  action: ProductConfiguratorAction
+): ProductConfiguratorState {
+  if (action.type === "setConfiguration") {
+    return {
+      ...state,
+      configuration: resolveStateAction(action.value, state.configuration),
+    }
+  }
+
+  if (action.type === "setSelectedImageIndex") {
+    return {
+      ...state,
+      selectedImageIndex: resolveStateAction(
+        action.value,
+        state.selectedImageIndex
+      ),
+    }
+  }
+
+  if (action.type === "setQuantity") {
+    return {
+      ...state,
+      quantity: resolveStateAction(action.value, state.quantity),
+    }
+  }
+
+  if (action.type === "setIsEditDialogOpen") {
+    return {
+      ...state,
+      isEditDialogOpen: resolveStateAction(
+        action.value,
+        state.isEditDialogOpen
+      ),
+    }
+  }
+
+  if (action.type === "setIsDeleteDialogOpen") {
+    return {
+      ...state,
+      isDeleteDialogOpen: resolveStateAction(
+        action.value,
+        state.isDeleteDialogOpen
+      ),
+    }
+  }
+
+  if (action.type === "setIsDeleting") {
+    return {
+      ...state,
+      isDeleting: resolveStateAction(action.value, state.isDeleting),
+    }
+  }
+
+  return {
+    ...state,
+    actionErrorMessage: resolveStateAction(
+      action.value,
+      state.actionErrorMessage
+    ),
   }
 }
 
@@ -388,20 +517,61 @@ function ProductConfigurator({
   detail: ProductDetail
   mode: ProductRouteMode
 }) {
+  return useProductConfiguratorElement({ detail, mode })
+}
+
+function useProductConfiguratorElement({
+  detail,
+  mode,
+}: {
+  detail: ProductDetail
+  mode: ProductRouteMode
+}) {
   const deleteProduct = useAction(api.cloudinary.deleteProduct)
   const customerState = useCustomerState()
-  const [configuration, setConfiguration] = useState(() =>
-    createInitialConfiguration(detail)
+  const [state, dispatch] = useReducer(
+    productConfiguratorReducer,
+    detail,
+    createInitialProductConfiguratorState
   )
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0)
-  const [quantity, setQuantity] = useState(1)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(
-    null
-  )
+  const {
+    actionErrorMessage,
+    configuration,
+    isDeleteDialogOpen,
+    isDeleting,
+    isEditDialogOpen,
+    quantity,
+    selectedImageIndex,
+  } = state
   const location = useLocation()
+
+  function setConfiguration(value: SetStateAction<ProductConfigurationState>) {
+    dispatch({ type: "setConfiguration", value })
+  }
+
+  function setSelectedImageIndex(value: SetStateAction<number>) {
+    dispatch({ type: "setSelectedImageIndex", value })
+  }
+
+  function setQuantity(value: SetStateAction<number>) {
+    dispatch({ type: "setQuantity", value })
+  }
+
+  function setIsEditDialogOpen(value: SetStateAction<boolean>) {
+    dispatch({ type: "setIsEditDialogOpen", value })
+  }
+
+  function setIsDeleteDialogOpen(value: SetStateAction<boolean>) {
+    dispatch({ type: "setIsDeleteDialogOpen", value })
+  }
+
+  function setIsDeleting(value: SetStateAction<boolean>) {
+    dispatch({ type: "setIsDeleting", value })
+  }
+
+  function setActionErrorMessage(value: SetStateAction<string | null>) {
+    dispatch({ type: "setActionErrorMessage", value })
+  }
 
   const { choiceValues, enabledOptions, fieldValues } = configuration
   const productCategoryHref = categoryHref(detail.category, mode)

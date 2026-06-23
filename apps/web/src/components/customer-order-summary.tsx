@@ -1,6 +1,6 @@
 import { formatPrice } from "@/lib/shop"
 import { Badge } from "@workspace/ui/components/badge"
-import { buttonVariants } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/lib/button-variants"
 import { cn } from "@workspace/ui/lib/utils"
 import type { GenericId } from "convex/values"
 import {

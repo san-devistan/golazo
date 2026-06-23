@@ -7,63 +7,9 @@
         "files": [
           "components/ui/**",
           "apps/mobile/components/ui/**",
-          "packages/ui/src/components/**",
-          "src/components/**"
+          "packages/ui/src/components/**"
         ],
-        "rules": [
-          "deslop/unused-file",
-          "react-doctor/no-multi-comp",
-          "react-doctor/only-export-components"
-        ]
-      },
-      {
-        "files": ["src/routes/**"],
-        "rules": [
-          "react-doctor/no-multi-comp",
-          "react-doctor/prefer-useReducer"
-        ]
-      },
-      {
-        "files": [
-          "src/components/admin-catalog-workspace.tsx",
-          "src/routes/admin.settings.tsx"
-        ],
-        "rules": [
-          "react-doctor/no-adjust-state-on-prop-change",
-          "react-doctor/no-cascading-set-state",
-          "react-doctor/no-chain-state-updates",
-          "react-doctor/no-derived-state",
-          "react-doctor/no-giant-component",
-          "react-doctor/prefer-useReducer"
-        ]
-      },
-      {
-        "files": [
-          "src/components/calendar.tsx",
-          "src/components/carousel.tsx",
-          "src/components/chart.tsx",
-          "src/components/field.tsx",
-          "src/components/shop-storefront.tsx"
-        ],
-        "rules": [
-          "react-doctor/advanced-event-handler-refs",
-          "react-doctor/no-event-handler",
-          "react-doctor/no-many-boolean-props",
-          "react-doctor/no-pass-data-to-parent",
-          "react-doctor/no-prop-callback-in-effect",
-          "react-doctor/prefer-dynamic-import",
-          "react-doctor/rerender-memo-before-early-return"
-        ]
-      },
-      {
-        "files": [
-          "src/components/customer/auth-dialog.tsx",
-          "src/routes/products.$slug.tsx"
-        ],
-        "rules": [
-          "react-doctor/no-giant-component",
-          "react-doctor/prefer-useReducer"
-        ]
+        "rules": ["deslop/unused-file"]
       }
     ]
   }

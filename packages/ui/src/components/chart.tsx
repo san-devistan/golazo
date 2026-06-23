@@ -7,9 +7,45 @@ import { ChartStyle } from "@workspace/ui/components/chart-style"
 import { ChartTooltipContent } from "@workspace/ui/components/chart-tooltip"
 import { cn } from "@workspace/ui/lib/utils"
 import * as React from "react"
-import * as RechartsPrimitive from "recharts"
+import type * as RechartsPrimitive from "recharts"
 
 const INITIAL_DIMENSION = { width: 320, height: 200 } as const
+const ResponsiveContainer = React.lazy(
+  async (): Promise<{
+    default: typeof RechartsPrimitive.ResponsiveContainer
+  }> => {
+    const { ResponsiveContainer: RechartsResponsiveContainer } =
+      await import("recharts")
+
+    return { default: RechartsResponsiveContainer }
+  }
+)
+const LazyChartTooltip = React.lazy(
+  async (): Promise<{ default: typeof RechartsPrimitive.Tooltip }> => {
+    const { Tooltip } = await import("recharts")
+
+    return { default: Tooltip }
+  }
+)
+const LazyChartLegend = React.lazy(
+  async (): Promise<{ default: typeof RechartsPrimitive.Legend }> => {
+    const { Legend } = await import("recharts")
+
+    return { default: Legend }
+  }
+)
+
+function ChartTooltip(
+  props: React.ComponentProps<typeof RechartsPrimitive.Tooltip>
+) {
+  return <LazyChartTooltip {...props} />
+}
+
+function ChartLegend(
+  props: React.ComponentProps<typeof RechartsPrimitive.Legend>
+) {
+  return <LazyChartLegend {...props} />
+}
 
 function ChartContainer({
   id,
@@ -44,18 +80,15 @@ function ChartContainer({
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer
-          initialDimension={initialDimension}
-        >
-          {children}
-        </RechartsPrimitive.ResponsiveContainer>
+        <React.Suspense fallback={null}>
+          <ResponsiveContainer initialDimension={initialDimension}>
+            {children}
+          </ResponsiveContainer>
+        </React.Suspense>
       </div>
     </ChartContext.Provider>
   )
 }
-
-const ChartTooltip = RechartsPrimitive.Tooltip
-const ChartLegend = RechartsPrimitive.Legend
 
 export {
   type ChartConfig,

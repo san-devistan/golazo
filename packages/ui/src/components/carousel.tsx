@@ -17,7 +17,6 @@ type CarouselProps = {
   opts?: CarouselOptions
   plugins?: CarouselPlugin
   orientation?: "horizontal" | "vertical"
-  setApi?: (api: CarouselApi) => void
 }
 
 type CarouselContextProps = {
@@ -44,7 +43,6 @@ function useCarousel() {
 function Carousel({
   orientation = "horizontal",
   opts,
-  setApi,
   plugins,
   className,
   children,
@@ -61,11 +59,14 @@ function Carousel({
   const [canScrollPrev, setCanScrollPrev] = React.useState(false)
   const [canScrollNext, setCanScrollNext] = React.useState(false)
 
-  const onSelect = React.useCallback((carouselApi: CarouselApi) => {
-    if (!carouselApi) return
+  const onSelectRef = React.useRef((carouselApi: CarouselApi) => {
+    if (!carouselApi) {
+      return
+    }
+
     setCanScrollPrev(carouselApi.canScrollPrev())
     setCanScrollNext(carouselApi.canScrollNext())
-  }, [])
+  })
 
   const scrollPrev = React.useCallback(() => {
     api?.scrollPrev()
@@ -89,21 +90,20 @@ function Carousel({
   )
 
   React.useEffect(() => {
-    if (!api || !setApi) return undefined
-    setApi(api)
-    return undefined
-  }, [api, setApi])
-
-  React.useEffect(() => {
     if (!api) return undefined
-    onSelect(api)
-    api.on("reInit", onSelect)
-    api.on("select", onSelect)
+    const handleSelect = (carouselApi: CarouselApi) => {
+      onSelectRef.current(carouselApi)
+    }
+
+    handleSelect(api)
+    api.on("reInit", handleSelect)
+    api.on("select", handleSelect)
 
     return () => {
-      api.off("select", onSelect)
+      api.off("reInit", handleSelect)
+      api.off("select", handleSelect)
     }
-  }, [api, onSelect])
+  }, [api])
   const contextValue = React.useMemo(
     () => ({
       carouselRef,

@@ -1,3 +1,8 @@
+import {
+  authFormReducer,
+  INITIAL_AUTH_FORM_STATE,
+  type AuthMode,
+} from "@/components/customer/auth-form-state"
 import { betterAuthErrorMessage } from "@/components/customer/utils"
 import { PasswordInput } from "@/components/password-input"
 import { authClient } from "@/lib/auth-client"
@@ -17,10 +22,8 @@ import {
   type FormEvent,
   type FormEventHandler,
   useCallback,
-  useState,
+  useReducer,
 } from "react"
-
-type AuthMode = "reset-request" | "sign-in" | "sign-up"
 
 export function AuthDialog({
   open,
@@ -30,50 +33,41 @@ export function AuthDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const session = authClient.useSession()
-  const [mode, setMode] = useState<AuthMode>("sign-in")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [state, dispatch] = useReducer(authFormReducer, INITIAL_AUTH_FORM_STATE)
+  const {
+    confirmPassword,
+    email,
+    errorMessage,
+    isSubmitting,
+    mode,
+    password,
+    successMessage,
+  } = state
   const user = session.data?.user
   const passwordMismatch =
     mode === "sign-up" &&
     confirmPassword.length > 0 &&
     password !== confirmPassword
 
-  const resetMessages = useCallback(() => {
-    setErrorMessage(null)
-    setSuccessMessage(null)
+  const switchMode = useCallback((nextMode: AuthMode) => {
+    dispatch({ type: "switchMode", mode: nextMode })
   }, [])
-
-  const switchMode = useCallback(
-    (nextMode: AuthMode) => {
-      resetMessages()
-      setConfirmPassword("")
-      setMode(nextMode)
-    },
-    [resetMessages]
-  )
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (!nextOpen) {
-        resetMessages()
-        setConfirmPassword("")
+        dispatch({ type: "close" })
       }
 
       onOpenChange(nextOpen)
     },
-    [onOpenChange, resetMessages]
+    [onOpenChange]
   )
 
   const submitAuthForm = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
-      setIsSubmitting(true)
-      resetMessages()
+      dispatch({ type: "submitStart" })
 
       try {
         if (mode === "reset-request") {
@@ -86,7 +80,10 @@ export function AuthDialog({
             throw result.error
           }
 
-          setSuccessMessage("If an account exists, a reset link has been sent.")
+          dispatch({
+            type: "submitSuccess",
+            message: "If an account exists, a reset link has been sent.",
+          })
           return
         }
 
@@ -108,15 +105,17 @@ export function AuthDialog({
         }
 
         onOpenChange(false)
-        setPassword("")
-        setConfirmPassword("")
+        dispatch({ type: "submitAuthSuccess" })
       } catch (error) {
-        setErrorMessage(betterAuthErrorMessage(error))
+        dispatch({
+          type: "submitError",
+          message: betterAuthErrorMessage(error),
+        })
       } finally {
-        setIsSubmitting(false)
+        dispatch({ type: "submitEnd" })
       }
     },
-    [confirmPassword, email, mode, onOpenChange, password, resetMessages]
+    [confirmPassword, email, mode, onOpenChange, password]
   )
 
   const handleFormSubmit = useCallback(
@@ -127,8 +126,7 @@ export function AuthDialog({
   )
 
   const handleSignOut = useCallback(async () => {
-    setIsSubmitting(true)
-    setErrorMessage(null)
+    dispatch({ type: "submitStart" })
 
     try {
       await authClient.signOut({
@@ -139,8 +137,10 @@ export function AuthDialog({
         },
       })
     } catch (error) {
-      setErrorMessage(betterAuthErrorMessage(error))
-      setIsSubmitting(false)
+      dispatch({
+        type: "submitError",
+        message: betterAuthErrorMessage(error),
+      })
     }
   }, [])
 
@@ -150,7 +150,7 @@ export function AuthDialog({
 
   const handleEmailChange = useCallback<ChangeEventHandler<HTMLInputElement>>(
     (event) => {
-      setEmail(event.target.value)
+      dispatch({ type: "setEmail", value: event.target.value })
     },
     []
   )
@@ -158,13 +158,13 @@ export function AuthDialog({
   const handlePasswordChange = useCallback<
     ChangeEventHandler<HTMLInputElement>
   >((event) => {
-    setPassword(event.target.value)
+    dispatch({ type: "setPassword", value: event.target.value })
   }, [])
 
   const handleConfirmPasswordChange = useCallback<
     ChangeEventHandler<HTMLInputElement>
   >((event) => {
-    setConfirmPassword(event.target.value)
+    dispatch({ type: "setConfirmPassword", value: event.target.value })
   }, [])
 
   const handleToggleMode = useCallback(() => {

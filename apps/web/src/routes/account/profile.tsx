@@ -14,8 +14,102 @@ import {
   type FormEvent,
   type FormEventHandler,
   useCallback,
-  useState,
+  useReducer,
 } from "react"
+
+type ProfileFormState = {
+  confirmPassword: string
+  currentPassword: string
+  errorMessage: string | null
+  isChangingPassword: boolean
+  isSubmitting: boolean
+  newPassword: string
+  successMessage: string | null
+}
+
+type ProfileFormAction =
+  | { type: "startChangingPassword" }
+  | { type: "cancelChangingPassword" }
+  | { type: "submitStart" }
+  | { type: "submitSuccess" }
+  | { type: "submitError"; message: string }
+  | { type: "setCurrentPassword"; value: string }
+  | { type: "setNewPassword"; value: string }
+  | { type: "setConfirmPassword"; value: string }
+
+const INITIAL_PROFILE_FORM_STATE: ProfileFormState = {
+  confirmPassword: "",
+  currentPassword: "",
+  errorMessage: null,
+  isChangingPassword: false,
+  isSubmitting: false,
+  newPassword: "",
+  successMessage: null,
+}
+
+function profileFormReducer(
+  state: ProfileFormState,
+  action: ProfileFormAction
+): ProfileFormState {
+  if (action.type === "startChangingPassword") {
+    return {
+      ...state,
+      errorMessage: null,
+      isChangingPassword: true,
+      successMessage: null,
+    }
+  }
+
+  if (action.type === "cancelChangingPassword") {
+    return {
+      ...state,
+      confirmPassword: "",
+      currentPassword: "",
+      errorMessage: null,
+      isChangingPassword: false,
+      newPassword: "",
+    }
+  }
+
+  if (action.type === "submitStart") {
+    return {
+      ...state,
+      errorMessage: null,
+      isSubmitting: true,
+      successMessage: null,
+    }
+  }
+
+  if (action.type === "submitSuccess") {
+    return {
+      ...state,
+      confirmPassword: "",
+      currentPassword: "",
+      isChangingPassword: false,
+      isSubmitting: false,
+      newPassword: "",
+      successMessage: "Password updated.",
+    }
+  }
+
+  if (action.type === "submitError") {
+    return {
+      ...state,
+      errorMessage: action.message,
+      isSubmitting: false,
+    }
+  }
+
+  if (action.type === "setCurrentPassword") {
+    return { ...state, currentPassword: action.value }
+  }
+
+  if (action.type === "setNewPassword") {
+    return { ...state, newPassword: action.value }
+  }
+
+  return { ...state, confirmPassword: action.value }
+}
 
 export function ProfileSection({
   email,
@@ -24,38 +118,32 @@ export function ProfileSection({
   email: string
   userId: string
 }) {
-  const [isChangingPassword, setIsChangingPassword] = useState(false)
-  const [currentPassword, setCurrentPassword] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-
-  const resetForm = useCallback(() => {
-    setCurrentPassword("")
-    setNewPassword("")
-    setConfirmPassword("")
-  }, [])
+  const [state, dispatch] = useReducer(
+    profileFormReducer,
+    INITIAL_PROFILE_FORM_STATE
+  )
+  const {
+    confirmPassword,
+    currentPassword,
+    errorMessage,
+    isChangingPassword,
+    isSubmitting,
+    newPassword,
+    successMessage,
+  } = state
 
   const handleChangeClick = useCallback(() => {
-    setErrorMessage(null)
-    setSuccessMessage(null)
-    setIsChangingPassword(true)
+    dispatch({ type: "startChangingPassword" })
   }, [])
 
   const handleCancel = useCallback(() => {
-    resetForm()
-    setErrorMessage(null)
-    setIsChangingPassword(false)
-  }, [resetForm])
+    dispatch({ type: "cancelChangingPassword" })
+  }, [])
 
   const submitPasswordChange = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
-      setIsSubmitting(true)
-      setErrorMessage(null)
-      setSuccessMessage(null)
+      dispatch({ type: "submitStart" })
 
       try {
         if (newPassword !== confirmPassword) {
@@ -72,16 +160,15 @@ export function ProfileSection({
           throw result.error
         }
 
-        resetForm()
-        setIsChangingPassword(false)
-        setSuccessMessage("Password updated.")
+        dispatch({ type: "submitSuccess" })
       } catch (error) {
-        setErrorMessage(betterAuthErrorMessage(error))
-      } finally {
-        setIsSubmitting(false)
+        dispatch({
+          type: "submitError",
+          message: betterAuthErrorMessage(error),
+        })
       }
     },
-    [confirmPassword, currentPassword, newPassword, resetForm]
+    [confirmPassword, currentPassword, newPassword]
   )
 
   const handleSubmit = useCallback(
@@ -94,17 +181,17 @@ export function ProfileSection({
   const handleCurrentPasswordChange = useCallback<
     ChangeEventHandler<HTMLInputElement>
   >((event) => {
-    setCurrentPassword(event.target.value)
+    dispatch({ type: "setCurrentPassword", value: event.target.value })
   }, [])
   const handleNewPasswordChange = useCallback<
     ChangeEventHandler<HTMLInputElement>
   >((event) => {
-    setNewPassword(event.target.value)
+    dispatch({ type: "setNewPassword", value: event.target.value })
   }, [])
   const handleConfirmPasswordChange = useCallback<
     ChangeEventHandler<HTMLInputElement>
   >((event) => {
-    setConfirmPassword(event.target.value)
+    dispatch({ type: "setConfirmPassword", value: event.target.value })
   }, [])
 
   return (

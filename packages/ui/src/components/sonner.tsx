@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import type { CSSProperties } from "react"
-import { Toaster as Sonner, toast, type ToasterProps } from "sonner"
+import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 type ToasterStyle = CSSProperties & {
   "--border-radius": string
@@ -62,4 +62,4 @@ function toToasterTheme(theme: string | undefined): ToasterProps["theme"] {
   return "system"
 }
 
-export { Toaster, toast }
+export { Toaster }

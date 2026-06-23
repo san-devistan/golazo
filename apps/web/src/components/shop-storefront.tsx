@@ -11,13 +11,14 @@ import {
 import { formatPrice, sortBySortOrder } from "@/lib/shop"
 import { Link } from "@tanstack/react-router"
 /* eslint-disable max-lines, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop */
-import { Button, buttonVariants } from "@workspace/ui/components/button"
+import { Button } from "@workspace/ui/components/button"
 import {
   Carousel,
   CarouselContent,
   CarouselItem,
   useCarousel,
 } from "@workspace/ui/components/carousel"
+import { buttonVariants } from "@workspace/ui/lib/button-variants"
 import { cn } from "@workspace/ui/lib/utils"
 import {
   ArrowDownIcon,
@@ -110,6 +111,38 @@ type ShopStorefrontProps<
   ) => void
 }
 
+type StorefrontContentState<
+  TCategory extends StorefrontCategory,
+  TProduct extends StorefrontProduct<CustomerProductId, TCategory["_id"]>,
+> =
+  | {
+      type: "loading"
+    }
+  | {
+      type: "category"
+      currentCategory: TCategory
+      categoryProductSections: Array<{
+        category: TCategory
+        products: Array<TProduct>
+      }>
+      directProducts: Array<TProduct>
+    }
+  | {
+      type: "empty"
+    }
+  | {
+      type: "categoryProductSections"
+      categoryProductSections: Array<{
+        category: TCategory
+        products: Array<TProduct>
+      }>
+      hideEmptySections: boolean
+    }
+  | {
+      type: "categoryLane"
+      visibleCategories: Array<TCategory>
+    }
+
 function moveBefore<T extends { _id: string }>(
   items: Array<T>,
   draggedId: T["_id"],
@@ -150,6 +183,62 @@ function moveByOffset<T>(items: Array<T>, index: number, offset: number) {
 
   nextItems.splice(targetIndex, 0, movedItem)
   return nextItems
+}
+
+function buildStorefrontContentState<
+  TCategory extends StorefrontCategory,
+  TProduct extends StorefrontProduct<CustomerProductId, TCategory["_id"]>,
+>({
+  categoryProductSections,
+  currentCategory,
+  directProducts,
+  hasCategories,
+  hasCategoryProductPreviews,
+  hideEmptySections,
+  isLoading,
+  visibleCategories,
+}: {
+  categoryProductSections: Array<{
+    category: TCategory
+    products: Array<TProduct>
+  }>
+  currentCategory?: TCategory | null
+  directProducts: Array<TProduct>
+  hasCategories: boolean
+  hasCategoryProductPreviews: boolean
+  hideEmptySections: boolean
+  isLoading: boolean
+  visibleCategories: Array<TCategory>
+}): StorefrontContentState<TCategory, TProduct> {
+  if (isLoading) {
+    return { type: "loading" }
+  }
+
+  if (currentCategory) {
+    return {
+      type: "category",
+      categoryProductSections,
+      currentCategory,
+      directProducts,
+    }
+  }
+
+  if (!hasCategories) {
+    return { type: "empty" }
+  }
+
+  if (hasCategoryProductPreviews) {
+    return {
+      type: "categoryProductSections",
+      categoryProductSections,
+      hideEmptySections,
+    }
+  }
+
+  return {
+    type: "categoryLane",
+    visibleCategories,
+  }
 }
 
 export function ShopStorefront<
@@ -203,13 +292,22 @@ export function ShopStorefront<
   )
   const hasCategories = visibleCategories.length > 0
   const isAdmin = mode === "admin"
-  const isCategoryPage = Boolean(currentCategory)
   const hasCategoryProductPreviews = categoryProductSections.some(
     (section) => section.products.length > 0
   )
   const currentPageHref = currentCategory
     ? categoryHref(currentCategory, mode)
     : catalogRootHref(mode)
+  const contentState = buildStorefrontContentState({
+    categoryProductSections,
+    currentCategory,
+    directProducts,
+    hasCategories,
+    hasCategoryProductPreviews,
+    hideEmptySections: !isAdmin,
+    isLoading,
+    visibleCategories,
+  })
 
   return (
     <main className="min-h-svh bg-white text-[#111]">
@@ -251,16 +349,8 @@ export function ShopStorefront<
 
         <StorefrontMainContent
           mode={mode}
-          currentCategory={currentCategory}
           currentPageHref={currentPageHref}
-          categoryProductSections={categoryProductSections}
-          directProducts={directProducts}
-          hasCategories={hasCategories}
-          hasCategoryProductPreviews={hasCategoryProductPreviews}
-          isAdmin={isAdmin}
-          isCategoryPage={isCategoryPage}
-          isLoading={isLoading}
-          visibleCategories={visibleCategories}
+          contentState={contentState}
           onEditCategory={onEditCategory}
           onDeleteCategory={onDeleteCategory}
           onToggleCategoryVisibility={onToggleCategoryVisibility}
@@ -280,16 +370,8 @@ function StorefrontMainContent<
   TProduct extends StorefrontProduct<CustomerProductId, TCategory["_id"]>,
 >({
   mode,
-  currentCategory,
   currentPageHref,
-  categoryProductSections,
-  directProducts,
-  hasCategories,
-  hasCategoryProductPreviews,
-  isAdmin,
-  isCategoryPage,
-  isLoading,
-  visibleCategories,
+  contentState,
   onEditCategory,
   onDeleteCategory,
   onToggleCategoryVisibility,
@@ -300,19 +382,8 @@ function StorefrontMainContent<
   onReorderProducts,
 }: {
   mode: StorefrontMode
-  currentCategory?: TCategory | null
   currentPageHref: string
-  categoryProductSections: Array<{
-    category: TCategory
-    products: Array<TProduct>
-  }>
-  directProducts: Array<TProduct>
-  hasCategories: boolean
-  hasCategoryProductPreviews: boolean
-  isAdmin: boolean
-  isCategoryPage: boolean
-  isLoading: boolean
-  visibleCategories: Array<TCategory>
+  contentState: StorefrontContentState<TCategory, TProduct>
   onEditCategory?: (category: TCategory) => void
   onDeleteCategory?: (category: TCategory) => void
   onToggleCategoryVisibility?: (category: TCategory) => void
@@ -325,18 +396,18 @@ function StorefrontMainContent<
     orderedProductIds: Array<TProduct["_id"]>
   ) => void
 }) {
-  if (isLoading) {
+  if (contentState.type === "loading") {
     return <StorefrontSkeleton />
   }
 
-  if (isCategoryPage && currentCategory) {
+  if (contentState.type === "category") {
     return (
       <CategoryPageContent
         mode={mode}
-        currentCategory={currentCategory}
+        currentCategory={contentState.currentCategory}
         currentPageHref={currentPageHref}
-        directProducts={directProducts}
-        categoryProductSections={categoryProductSections}
+        directProducts={contentState.directProducts}
+        categoryProductSections={contentState.categoryProductSections}
         onEditCategory={onEditCategory}
         onDeleteCategory={onDeleteCategory}
         onToggleCategoryVisibility={onToggleCategoryVisibility}
@@ -349,16 +420,16 @@ function StorefrontMainContent<
     )
   }
 
-  if (!hasCategories) {
+  if (contentState.type === "empty") {
     return <EmptyShelf isCategoryPage={false} />
   }
 
-  if (hasCategoryProductPreviews) {
+  if (contentState.type === "categoryProductSections") {
     return (
       <CategoryProductSections
         mode={mode}
         currentPageHref={currentPageHref}
-        sections={categoryProductSections}
+        sections={contentState.categoryProductSections}
         onEditCategory={onEditCategory}
         onDeleteCategory={onDeleteCategory}
         onToggleCategoryVisibility={onToggleCategoryVisibility}
@@ -366,7 +437,7 @@ function StorefrontMainContent<
         onDeleteProduct={onDeleteProduct}
         onToggleProductVisibility={onToggleProductVisibility}
         onReorderCategories={onReorderCategories}
-        hideEmptySections={!isAdmin}
+        hideEmptySections={contentState.hideEmptySections}
       />
     )
   }
@@ -374,7 +445,7 @@ function StorefrontMainContent<
   return (
     <CategoryLane
       mode={mode}
-      categories={visibleCategories}
+      categories={contentState.visibleCategories}
       onEditCategory={onEditCategory}
       onDeleteCategory={onDeleteCategory}
       onToggleCategoryVisibility={onToggleCategoryVisibility}
@@ -1224,24 +1295,38 @@ function ProductCarouselScrollbar() {
         : { isScrollable, thumbWidth }
     )
   }, [api])
+  const updateThumbPositionRef = useRef(updateThumbPosition)
+  const syncScrollbarMetricsRef = useRef(syncScrollbarMetrics)
+
+  useEffect(() => {
+    updateThumbPositionRef.current = updateThumbPosition
+    syncScrollbarMetricsRef.current = syncScrollbarMetrics
+  }, [syncScrollbarMetrics, updateThumbPosition])
 
   useEffect(() => {
     if (!api) {
       return undefined
     }
 
-    syncScrollbarMetrics()
-    updateThumbPosition()
-    api.on("reInit", syncScrollbarMetrics)
-    api.on("scroll", updateThumbPosition)
-    api.on("select", updateThumbPosition)
+    const handleMetricsChange = () => {
+      syncScrollbarMetricsRef.current()
+    }
+    const handlePositionChange = () => {
+      updateThumbPositionRef.current()
+    }
+
+    handleMetricsChange()
+    handlePositionChange()
+    api.on("reInit", handleMetricsChange)
+    api.on("scroll", handlePositionChange)
+    api.on("select", handlePositionChange)
 
     return () => {
-      api.off("reInit", syncScrollbarMetrics)
-      api.off("scroll", updateThumbPosition)
-      api.off("select", updateThumbPosition)
+      api.off("reInit", handleMetricsChange)
+      api.off("scroll", handlePositionChange)
+      api.off("select", handlePositionChange)
     }
-  }, [api, syncScrollbarMetrics, updateThumbPosition])
+  }, [api])
 
   useEffect(() => {
     updateThumbPosition()

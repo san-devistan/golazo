@@ -1,4 +1,5 @@
-import { Button, buttonVariants } from "@workspace/ui/components/button"
+import { Button } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/lib/button-variants"
 import { cn } from "@workspace/ui/lib/utils"
 import {
   ChevronDownIcon,
@@ -268,14 +269,18 @@ function CalendarDayButton({
   ...props
 }: React.ComponentProps<typeof DayButton> & { locale?: Partial<Locale> }) {
   const defaultClassNames = getDefaultClassNames()
-
-  const ref = React.useRef<HTMLButtonElement>(null)
-  React.useEffect(() => {
-    if (modifiers.focused) ref.current?.focus()
-  }, [modifiers.focused])
+  const buttonRef = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (node && modifiers.focused) {
+        node.focus()
+      }
+    },
+    [modifiers.focused]
+  )
 
   return (
     <Button
+      ref={buttonRef}
       variant="ghost"
       size="icon"
       data-day={day.date.toLocaleDateString(locale?.code)}

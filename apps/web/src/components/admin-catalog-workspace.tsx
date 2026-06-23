@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog"
 import { Badge } from "@workspace/ui/components/badge"
-import { Button, buttonVariants } from "@workspace/ui/components/button"
+import { Button } from "@workspace/ui/components/button"
 import {
   Dialog,
   DialogContent,
@@ -33,7 +33,8 @@ import {
 } from "@workspace/ui/components/dialog"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { toast } from "@workspace/ui/components/sonner"
+import { buttonVariants } from "@workspace/ui/lib/button-variants"
+import { toast } from "@workspace/ui/lib/toast"
 import { useAction, useMutation, useQuery } from "convex/react"
 import type { GenericId } from "convex/values"
 import {
@@ -47,7 +48,7 @@ import {
   SaveIcon,
   Trash2Icon,
 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useReducer, useRef, useState } from "react"
 
 type CategoryId = GenericId<"catalogCategories">
 type ProductId = GenericId<"products">
@@ -197,6 +198,46 @@ type DeleteTarget =
   | { type: "category"; category: AdminCategory }
   | { type: "product"; product: AdminProductRecord["product"] }
 
+type ProductEditorFormState = {
+  sourceProductId: ProductId | null
+  form: ProductFormState | null
+}
+
+type AdminCatalogState = {
+  categoryForm: CategoryFormState | null
+  productForm: ProductFormState | null
+  deleteTarget: DeleteTarget | null
+  isDeleting: boolean
+  isUploading: boolean
+  showBackendSetupState: boolean
+}
+
+type AdminCatalogAction =
+  | {
+      type: "setCategoryForm"
+      value: React.SetStateAction<CategoryFormState | null>
+    }
+  | {
+      type: "setProductForm"
+      value: React.SetStateAction<ProductFormState | null>
+    }
+  | {
+      type: "setDeleteTarget"
+      value: React.SetStateAction<DeleteTarget | null>
+    }
+  | {
+      type: "setIsDeleting"
+      value: React.SetStateAction<boolean>
+    }
+  | {
+      type: "setIsUploading"
+      value: React.SetStateAction<boolean>
+    }
+  | {
+      type: "setShowBackendSetupState"
+      value: React.SetStateAction<boolean>
+    }
+
 type CloudinaryUploadResponse = {
   secure_url: string
   public_id: string
@@ -222,6 +263,14 @@ const PRODUCT_IMAGE_TYPES = new Set([
   "image/webp",
   "image/avif",
 ])
+const INITIAL_ADMIN_CATALOG_STATE: AdminCatalogState = {
+  categoryForm: null,
+  productForm: null,
+  deleteTarget: null,
+  isDeleting: false,
+  isUploading: false,
+  showBackendSetupState: false,
+}
 const MAX_PRODUCT_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
 const MAX_PRODUCT_IMAGE_COUNT = 12
 
@@ -558,7 +607,75 @@ function sortProductRecords(records: Array<AdminProductRecord>) {
   })
 }
 
+function isStateUpdater<T>(
+  value: React.SetStateAction<T>
+): value is (current: T) => T {
+  return typeof value === "function"
+}
+
+function resolveStateAction<T>(value: React.SetStateAction<T>, current: T): T {
+  return isStateUpdater(value) ? value(current) : value
+}
+
+function adminCatalogReducer(
+  state: AdminCatalogState,
+  action: AdminCatalogAction
+): AdminCatalogState {
+  if (action.type === "setCategoryForm") {
+    return {
+      ...state,
+      categoryForm: resolveStateAction(action.value, state.categoryForm),
+    }
+  }
+
+  if (action.type === "setProductForm") {
+    return {
+      ...state,
+      productForm: resolveStateAction(action.value, state.productForm),
+    }
+  }
+
+  if (action.type === "setDeleteTarget") {
+    return {
+      ...state,
+      deleteTarget: resolveStateAction(action.value, state.deleteTarget),
+    }
+  }
+
+  if (action.type === "setIsDeleting") {
+    return {
+      ...state,
+      isDeleting: resolveStateAction(action.value, state.isDeleting),
+    }
+  }
+
+  if (action.type === "setIsUploading") {
+    return {
+      ...state,
+      isUploading: resolveStateAction(action.value, state.isUploading),
+    }
+  }
+
+  return {
+    ...state,
+    showBackendSetupState: resolveStateAction(
+      action.value,
+      state.showBackendSetupState
+    ),
+  }
+}
+
 export function AdminCatalogWorkspace({
+  categoryId,
+  categoryPath,
+}: {
+  categoryId?: CategoryId
+  categoryPath?: string
+}) {
+  return useAdminCatalogWorkspaceElement({ categoryId, categoryPath })
+}
+
+function useAdminCatalogWorkspaceElement({
   categoryId,
   categoryPath,
 }: {
@@ -577,14 +694,46 @@ export function AdminCatalogWorkspace({
   const createCloudinaryUploadSignature = useAction(
     api.cloudinary.createUploadSignature
   )
-  const [categoryForm, setCategoryForm] = useState<CategoryFormState | null>(
-    null
+  const [catalogState, dispatchCatalog] = useReducer(
+    adminCatalogReducer,
+    INITIAL_ADMIN_CATALOG_STATE
   )
-  const [productForm, setProductForm] = useState<ProductFormState | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
-  const [showBackendSetupState, setShowBackendSetupState] = useState(false)
+  const {
+    categoryForm,
+    deleteTarget,
+    isDeleting,
+    isUploading,
+    productForm,
+    showBackendSetupState,
+  } = catalogState
+
+  function setCategoryForm(
+    value: React.SetStateAction<CategoryFormState | null>
+  ) {
+    dispatchCatalog({ type: "setCategoryForm", value })
+  }
+
+  function setProductForm(
+    value: React.SetStateAction<ProductFormState | null>
+  ) {
+    dispatchCatalog({ type: "setProductForm", value })
+  }
+
+  function setDeleteTarget(value: React.SetStateAction<DeleteTarget | null>) {
+    dispatchCatalog({ type: "setDeleteTarget", value })
+  }
+
+  function setIsDeleting(value: React.SetStateAction<boolean>) {
+    dispatchCatalog({ type: "setIsDeleting", value })
+  }
+
+  function setIsUploading(value: React.SetStateAction<boolean>) {
+    dispatchCatalog({ type: "setIsUploading", value })
+  }
+
+  function setShowBackendSetupState(value: React.SetStateAction<boolean>) {
+    dispatchCatalog({ type: "setShowBackendSetupState", value })
+  }
 
   const categories = data?.categories ?? []
   const templates = data?.optionTemplates ?? []
@@ -989,7 +1138,11 @@ export function AdminProductEditorDialog({
   const createCloudinaryUploadSignature = useAction(
     api.cloudinary.createUploadSignature
   )
-  const [productForm, setProductForm] = useState<ProductFormState | null>(null)
+  const [productEditorForm, setProductEditorForm] =
+    useState<ProductEditorFormState>({
+      sourceProductId: null,
+      form: null,
+    })
   const [isUploading, setIsUploading] = useState(false)
 
   const categories = data?.categories ?? []
@@ -1011,31 +1164,36 @@ export function AdminProductEditorDialog({
   const productAssignableCategories = currentCategory
     ? [currentCategory, ...childCategories]
     : []
+  const sourceProductId =
+    isOpen && productRecord ? productRecord.product._id : null
+  let productForm = productEditorForm.form
 
-  useEffect(() => {
-    if (!isOpen) {
-      setProductForm(null)
-      return
-    }
-
-    if (productForm !== null || !productRecord) {
-      return
-    }
-
-    setProductForm(productRecordToForm(productRecord))
-  }, [isOpen, productForm, productRecord])
+  if (productEditorForm.sourceProductId !== sourceProductId) {
+    productForm =
+      sourceProductId && productRecord
+        ? productRecordToForm(productRecord)
+        : null
+    setProductEditorForm({
+      sourceProductId,
+      form: productForm,
+    })
+  }
 
   function handleChangeProductForm(
     value: React.SetStateAction<ProductFormState | null>
   ) {
-    setProductForm((current) => {
-      const nextValue = typeof value === "function" ? value(current) : value
+    setProductEditorForm((current) => {
+      const nextValue =
+        typeof value === "function" ? value(current.form) : value
 
       if (nextValue === null) {
         onOpenChange(false)
       }
 
-      return nextValue
+      return {
+        sourceProductId: current.sourceProductId,
+        form: nextValue,
+      }
     })
   }
 
@@ -1081,7 +1239,10 @@ export function AdminProductEditorDialog({
         })),
       })
       toast.success("Product saved.")
-      setProductForm(null)
+      setProductEditorForm({
+        sourceProductId: null,
+        form: null,
+      })
       onOpenChange(false)
       onSaved?.(slugify(productForm.name))
     } catch (error) {
@@ -1115,15 +1276,16 @@ export function AdminProductEditorDialog({
         })
       )
 
-      setProductForm((current) =>
-        current
+      setProductEditorForm((current) => ({
+        sourceProductId: current.sourceProductId,
+        form: current.form
           ? {
-              ...current,
-              images: [...current.images, ...uploadedImages],
+              ...current.form,
+              images: [...current.form.images, ...uploadedImages],
               cloudinaryAssetFolder: uploadSignature.assetFolder,
             }
-          : current
-      )
+          : current.form,
+      }))
       toast.success(
         uploadedImages.length === 1
           ? "Image uploaded to Cloudinary."
