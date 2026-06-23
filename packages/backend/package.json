@@ -19,15 +19,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@convex-dev/better-auth": "^0.12.2",
-    "@convex-dev/resend": "^0.2.4",
+    "@convex-dev/better-auth": "^0.12.4",
+    "@convex-dev/resend": "^0.2.5",
     "@convex-dev/stripe": "0.1.4",
     "better-auth": "1.6.14",
-    "convex": "^1.40.0",
+    "convex": "^1.41.0",
     "stripe": "^20.4.1"
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
+    "@types/node": "^25.9.4",
     "typescript": "5.9.3"
   }
 }

@@ -29,7 +29,6 @@ import {
   EyeIcon,
   EyeOffIcon,
   FolderPlusIcon,
-  GripVerticalIcon,
   MailIcon,
   PackagePlusIcon,
   PencilIcon,
@@ -142,30 +141,6 @@ type StorefrontContentState<
       type: "categoryLane"
       visibleCategories: Array<TCategory>
     }
-
-function moveBefore<T extends { _id: string }>(
-  items: Array<T>,
-  draggedId: T["_id"],
-  targetId: T["_id"]
-) {
-  const draggedItem = items.find((item) => item._id === draggedId)
-  if (!draggedItem) {
-    return items
-  }
-
-  const withoutDragged = items.filter((item) => item._id !== draggedId)
-  const targetIndex = withoutDragged.findIndex((item) => item._id === targetId)
-
-  if (targetIndex < 0) {
-    return items
-  }
-
-  return [
-    ...withoutDragged.slice(0, targetIndex),
-    draggedItem,
-    ...withoutDragged.slice(targetIndex),
-  ]
-}
 
 function moveByOffset<T>(items: Array<T>, index: number, offset: number) {
   const targetIndex = index + offset
@@ -1097,43 +1072,14 @@ function CategoryLane<TCategory extends StorefrontCategory>({
   onToggleCategoryVisibility?: (category: TCategory) => void
   onReorderCategories?: (orderedCategoryIds: Array<TCategory["_id"]>) => void
 }) {
-  const draggedCategoryIdRef = useRef<TCategory["_id"] | null>(null)
   const isAdmin = mode === "admin"
 
   return (
     <div className="grid gap-x-2 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
-      {categories.map((category) => (
+      {categories.map((category, index) => (
         <article
           key={category._id}
-          draggable={isAdmin}
-          onDragStart={() => {
-            draggedCategoryIdRef.current = category._id
-          }}
-          onDragEnd={() => {
-            draggedCategoryIdRef.current = null
-          }}
-          onDragOver={(event) => {
-            if (isAdmin) {
-              event.preventDefault()
-            }
-          }}
-          onDrop={() => {
-            const draggedCategoryId = draggedCategoryIdRef.current
-            if (!draggedCategoryId || !onReorderCategories) {
-              return
-            }
-
-            onReorderCategories(
-              moveBefore(categories, draggedCategoryId, category._id).map(
-                (item) => item._id
-              )
-            )
-            draggedCategoryIdRef.current = null
-          }}
-          className={cn(
-            "group relative min-w-0 outline-none",
-            isAdmin && "cursor-grab active:cursor-grabbing"
-          )}
+          className="group relative min-w-0 outline-none"
         >
           <Link to={categoryHref(category, mode)} className="block">
             <div className="flex aspect-[4/5] items-end bg-[#ededed] p-5 transition group-hover:bg-[#e3e3e3]">
@@ -1154,9 +1100,34 @@ function CategoryLane<TCategory extends StorefrontCategory>({
           )}
           {isAdmin && (
             <CardAdminOverlay>
-              <CardIconButton title="Drag category" variant="outline">
-                <GripVerticalIcon />
-              </CardIconButton>
+              {onReorderCategories && (
+                <>
+                  <AdminOrderIconButton
+                    direction="left"
+                    label="Move category left"
+                    disabled={index === 0}
+                    onClick={() =>
+                      onReorderCategories(
+                        moveByOffset(categories, index, -1).map(
+                          (item) => item._id
+                        )
+                      )
+                    }
+                  />
+                  <AdminOrderIconButton
+                    direction="right"
+                    label="Move category right"
+                    disabled={index === categories.length - 1}
+                    onClick={() =>
+                      onReorderCategories(
+                        moveByOffset(categories, index, 1).map(
+                          (item) => item._id
+                        )
+                      )
+                    }
+                  />
+                </>
+              )}
               <CardIconButton
                 title="Edit category"
                 variant="outline"

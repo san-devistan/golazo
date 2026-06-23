@@ -1,25 +1,23 @@
 {
-  "name": "TEMPLATE",
+  "name": "golazo",
   "version": "0.0.1",
   "private": true,
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "deps:update": "pnpm up -r",
-    "deps:update:latest": "pnpm up -r --latest",
     "fix": "bash scripts/fix.sh",
-    "sync:convex-url": "node scripts/sync-convex-url.mjs",
+    "update:deps": "pnpm update -r",
+    "update:skills": "npx --yes skills update --project --yes && pnpm -r --workspace-concurrency=1 exec npx --yes skills update --project --yes",
+    "sync:shadcn": "npx shadcn@latest diff -c packages/ui",
     "sync:mobile-theme": "node scripts/sync-mobile-theme.mjs"
   },
   "devDependencies": {
-    "oxc-minify": "^0.129.0",
     "oxc-parser": "^0.129.0",
-    "oxc-resolver": "^11.20.0",
-    "oxc-transform": "^0.129.0",
+    "oxc-resolver": "^11.21.3",
     "oxfmt": "^0.48.0",
-    "oxlint": "^1.68.0",
+    "oxlint": "^1.70.0",
     "oxlint-tsgolint": "^0.22.1",
-    "turbo": "^2.9.16",
+    "turbo": "^2.9.18",
     "typescript": "5.9.3"
   },
   "engines": {
