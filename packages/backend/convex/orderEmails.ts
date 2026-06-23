@@ -1,5 +1,3 @@
-/* eslint-disable no-underscore-dangle -- Convex documents expose _id fields. */
-
 import { v } from "convex/values"
 
 import type { Id } from "./_generated/dataModel.d.ts"

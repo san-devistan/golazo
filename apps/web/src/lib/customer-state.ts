@@ -1,4 +1,13 @@
 import { authClient } from "@/lib/auth-client"
+import {
+  CUSTOMER_STORAGE_KEY,
+  EMPTY_LOCAL_STATE,
+  emptyLocalState,
+  parseLocalState,
+  readLocalState,
+  type LocalCustomerState,
+  writeLocalState,
+} from "@/lib/customer-state-storage"
 import { api } from "@workspace/backend/api"
 import { useAction, useMutation, useQuery } from "convex/react"
 import type { GenericId } from "convex/values"
@@ -10,7 +19,6 @@ import {
   useSyncExternalStore,
 } from "react"
 
-const CUSTOMER_STORAGE_KEY = "golazo.customer-state.v1"
 const MAX_CART_QUANTITY = 99
 
 export type ProductId = GenericId<"products">
@@ -58,16 +66,6 @@ export type AddCartItemInput = {
   quantity: number
 }
 
-type LocalCustomerState = {
-  wishlistItems: Array<CustomerWishlistItem>
-  cartItems: Array<CustomerCartItem>
-}
-
-const EMPTY_LOCAL_STATE: LocalCustomerState = {
-  wishlistItems: [],
-  cartItems: [],
-}
-
 let localStateCache = EMPTY_LOCAL_STATE
 let hasHydratedLocalState = false
 let isListeningToStorage = false
@@ -86,52 +84,6 @@ function clampQuantity(quantity: number) {
   }
 
   return Math.min(quantity, MAX_CART_QUANTITY)
-}
-
-function emptyLocalState(state: LocalCustomerState) {
-  return state.wishlistItems.length === 0 && state.cartItems.length === 0
-}
-
-function parseLocalState(value: string | null): LocalCustomerState {
-  if (!value) {
-    return EMPTY_LOCAL_STATE
-  }
-
-  try {
-    const parsedValue = JSON.parse(value) as Partial<LocalCustomerState>
-
-    return {
-      wishlistItems: Array.isArray(parsedValue.wishlistItems)
-        ? parsedValue.wishlistItems
-        : [],
-      cartItems: Array.isArray(parsedValue.cartItems)
-        ? parsedValue.cartItems
-        : [],
-    }
-  } catch {
-    return EMPTY_LOCAL_STATE
-  }
-}
-
-function readLocalState() {
-  if (typeof window === "undefined") {
-    return EMPTY_LOCAL_STATE
-  }
-
-  return parseLocalState(window.localStorage.getItem(CUSTOMER_STORAGE_KEY))
-}
-
-function writeLocalState(state: LocalCustomerState) {
-  if (typeof window === "undefined") {
-    return
-  }
-
-  if (emptyLocalState(state)) {
-    window.localStorage.removeItem(CUSTOMER_STORAGE_KEY)
-    return
-  }
-
-  window.localStorage.setItem(CUSTOMER_STORAGE_KEY, JSON.stringify(state))
 }
 
 function getLocalStateSnapshot() {

@@ -1,5 +1,3 @@
-/* eslint-disable no-underscore-dangle */
-
 export type CatalogNavigationMode = "admin" | "public"
 
 export type CatalogNavigationCategory = {
@@ -22,7 +20,7 @@ export function catalogRootHref(mode: CatalogNavigationMode) {
   return mode === "admin" ? "/admin" : "/"
 }
 
-export function catalogPathHref(path: string, mode: CatalogNavigationMode) {
+function catalogPathHref(path: string, mode: CatalogNavigationMode) {
   const normalizedPath = normalizeCatalogPath(path)
 
   if (!normalizedPath) {

@@ -7,13 +7,15 @@ import Stripe from "stripe"
 import { components, internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel.d.ts"
 import { action } from "./_generated/server"
+import {
+  DEFAULT_SHIPPING_ALLOWED_COUNTRIES,
+  isShippingAllowedCountry,
+} from "./stripeAllowedCountries"
 
 const SITE_URL_FALLBACK = "http://localhost:3000"
 const STRIPE_API_VERSION = "2026-02-25.clover" as const
 const MAX_STRIPE_DESCRIPTION_LENGTH = 900
 const stripeComponent = new StripeSubscriptions(components.stripe, {})
-const DEFAULT_SHIPPING_ALLOWED_COUNTRIES: Array<Stripe.Checkout.SessionCreateParams.ShippingAddressCollection.AllowedCountry> =
-  ["FR"]
 
 type CheckoutActionLineItem = {
   productName: string
@@ -61,10 +63,10 @@ function shippingAllowedCountries() {
   const configuredCountries =
     process.env.STRIPE_SHIPPING_ALLOWED_COUNTRIES?.split(",")
       .map((country) => country.trim().toUpperCase())
-      .filter((country) => /^[A-Z]{2}$/.test(country))
+      .filter(isShippingAllowedCountry)
 
   if (configuredCountries && configuredCountries.length > 0) {
-    return configuredCountries as Array<Stripe.Checkout.SessionCreateParams.ShippingAddressCollection.AllowedCountry>
+    return configuredCountries
   }
 
   return DEFAULT_SHIPPING_ALLOWED_COUNTRIES

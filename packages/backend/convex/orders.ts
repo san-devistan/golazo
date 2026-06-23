@@ -1,5 +1,3 @@
-/* eslint-disable no-underscore-dangle -- Convex documents expose _id fields. */
-
 import { v } from "convex/values"
 
 import { internal } from "./_generated/api"

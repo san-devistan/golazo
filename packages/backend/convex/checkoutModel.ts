@@ -1,9 +1,10 @@
-/* eslint-disable no-await-in-loop, no-underscore-dangle -- Convex order writes are transactional and documents expose _id fields. */
+/* eslint-disable no-await-in-loop -- Convex order writes are transactional. */
 
 import { v, type Infer } from "convex/values"
 
 import { internal } from "./_generated/api"
-import { internalMutation } from "./_generated/server"
+import type { Doc } from "./_generated/dataModel.d.ts"
+import { internalMutation, type MutationCtx } from "./_generated/server"
 import { priceCartProductConfiguration } from "./cartPricing"
 import {
   cartConfigurationSummaryValidator,
@@ -34,6 +35,19 @@ type CheckoutFulfillmentStatus = Infer<
 type CheckoutOrderItemSnapshot = Infer<
   typeof checkoutOrderItemSnapshotValidator
 >
+type CheckoutOrder = Doc<"checkoutOrders">
+type CompleteOrderArgs = {
+  status: CheckoutOrderStatus
+  commandId?: string
+  stripeCustomerId?: string
+  stripePaymentIntentId?: string
+  stripePaymentStatus?: string
+  customerEmail?: string | null
+  customerPhone?: string | null
+  shippingName?: string | null
+  shippingAddress?: CheckoutOrder["shippingAddress"]
+  failureReason?: string
+}
 
 function normalizeQuantity(quantity: number) {
   if (!Number.isInteger(quantity) || quantity < 1) {
@@ -52,6 +66,97 @@ function commandIdForOrder(orderId: string, now: number) {
   const idSuffix = orderId.slice(-6).toUpperCase()
 
   return `GLZ-${date}-${idSuffix}`
+}
+
+function fulfillmentStatusForCompletion(
+  status: CheckoutOrderStatus,
+  currentStatus: CheckoutFulfillmentStatus | undefined
+): CheckoutFulfillmentStatus {
+  if (status === "failed" || status === "expired") {
+    return "cancelled"
+  }
+
+  return currentStatus ?? "unfulfilled"
+}
+
+function assignIfDefined<T extends object, K extends keyof T>(
+  target: Partial<T>,
+  key: K,
+  value: T[K] | undefined
+) {
+  if (value !== undefined) {
+    target[key] = value
+  }
+}
+
+function checkoutCompletionPatch(
+  order: CheckoutOrder,
+  args: CompleteOrderArgs,
+  now: number
+): Partial<CheckoutOrder> {
+  const patch: Partial<CheckoutOrder> = {
+    status: args.status,
+    fulfillmentStatus: fulfillmentStatusForCompletion(
+      args.status,
+      order.fulfillmentStatus
+    ),
+    updatedAt: now,
+  }
+
+  assignIfDefined(patch, "commandId", args.commandId)
+  assignIfDefined(patch, "stripeCustomerId", args.stripeCustomerId)
+  assignIfDefined(patch, "stripePaymentIntentId", args.stripePaymentIntentId)
+  assignIfDefined(patch, "stripePaymentStatus", args.stripePaymentStatus)
+  assignIfDefined(patch, "customerEmail", args.customerEmail)
+  assignIfDefined(patch, "customerPhone", args.customerPhone)
+  assignIfDefined(patch, "shippingName", args.shippingName)
+  assignIfDefined(patch, "shippingAddress", args.shippingAddress)
+
+  if (args.failureReason !== undefined) {
+    patch.failureReason = normalizeFailureReason(args.failureReason)
+  }
+
+  if (args.status === "paid") {
+    patch.completedAt = order.completedAt ?? now
+  }
+
+  return patch
+}
+
+async function clearPurchasedCartItems(
+  ctx: MutationCtx,
+  order: CheckoutOrder,
+  now: number
+) {
+  const orderItems = await ctx.db
+    .query("checkoutOrderItems")
+    .withIndex("by_orderId", (q) => q.eq("orderId", order._id))
+    .take(MAX_CHECKOUT_LINE_ITEMS)
+
+  for (const orderItem of orderItems) {
+    const cartItem = await ctx.db
+      .query("cartItems")
+      .withIndex("by_userTokenIdentifier_and_configurationKey", (q) =>
+        q
+          .eq("userTokenIdentifier", order.userTokenIdentifier)
+          .eq("configurationKey", orderItem.configurationKey)
+      )
+      .unique()
+
+    if (!cartItem) {
+      continue
+    }
+
+    if (cartItem.quantity > orderItem.quantity) {
+      await ctx.db.patch(cartItem._id, {
+        quantity: cartItem.quantity - orderItem.quantity,
+        updatedAt: now,
+      })
+      continue
+    }
+
+    await ctx.db.delete(cartItem._id)
+  }
 }
 
 export const createPendingOrderFromCart = internalMutation({
@@ -234,81 +339,16 @@ export const completeOrderFromCheckoutSession = internalMutation({
     }
 
     const now = Date.now()
-    const nextStatus: CheckoutOrderStatus = args.status
-    const nextFulfillmentStatus: CheckoutFulfillmentStatus | undefined =
-      nextStatus === "failed" || nextStatus === "expired"
-        ? "cancelled"
-        : (order.fulfillmentStatus ?? "unfulfilled")
     const shouldClearPurchasedCartItems =
-      nextStatus === "paid" && order.status !== "paid"
+      args.status === "paid" && order.status !== "paid"
 
-    await ctx.db.patch(order._id, {
-      status: nextStatus,
-      fulfillmentStatus: nextFulfillmentStatus,
-      ...(args.commandId !== undefined && {
-        commandId: args.commandId,
-      }),
-      ...(args.stripeCustomerId !== undefined && {
-        stripeCustomerId: args.stripeCustomerId,
-      }),
-      ...(args.stripePaymentIntentId !== undefined && {
-        stripePaymentIntentId: args.stripePaymentIntentId,
-      }),
-      ...(args.stripePaymentStatus !== undefined && {
-        stripePaymentStatus: args.stripePaymentStatus,
-      }),
-      ...(args.customerEmail !== undefined && {
-        customerEmail: args.customerEmail,
-      }),
-      ...(args.customerPhone !== undefined && {
-        customerPhone: args.customerPhone,
-      }),
-      ...(args.shippingName !== undefined && {
-        shippingName: args.shippingName,
-      }),
-      ...(args.shippingAddress !== undefined && {
-        shippingAddress: args.shippingAddress,
-      }),
-      ...(args.failureReason !== undefined && {
-        failureReason: normalizeFailureReason(args.failureReason),
-      }),
-      ...(nextStatus === "paid" && { completedAt: order.completedAt ?? now }),
-      updatedAt: now,
-    })
+    await ctx.db.patch(order._id, checkoutCompletionPatch(order, args, now))
 
     if (!shouldClearPurchasedCartItems) {
       return null
     }
 
-    const orderItems = await ctx.db
-      .query("checkoutOrderItems")
-      .withIndex("by_orderId", (q) => q.eq("orderId", order._id))
-      .take(MAX_CHECKOUT_LINE_ITEMS)
-
-    for (const orderItem of orderItems) {
-      const cartItem = await ctx.db
-        .query("cartItems")
-        .withIndex("by_userTokenIdentifier_and_configurationKey", (q) =>
-          q
-            .eq("userTokenIdentifier", order.userTokenIdentifier)
-            .eq("configurationKey", orderItem.configurationKey)
-        )
-        .unique()
-
-      if (!cartItem) {
-        continue
-      }
-
-      if (cartItem.quantity > orderItem.quantity) {
-        await ctx.db.patch(cartItem._id, {
-          quantity: cartItem.quantity - orderItem.quantity,
-          updatedAt: now,
-        })
-        continue
-      }
-
-      await ctx.db.delete(cartItem._id)
-    }
+    await clearPurchasedCartItems(ctx, order, now)
 
     await ctx.scheduler.runAfter(
       0,

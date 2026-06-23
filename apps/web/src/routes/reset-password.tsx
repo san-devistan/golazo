@@ -6,7 +6,12 @@ import { Button, buttonVariants } from "@workspace/ui/components/button"
 import { Label } from "@workspace/ui/components/label"
 import { cn } from "@workspace/ui/lib/utils"
 import { ArrowLeftIcon, KeyRoundIcon } from "lucide-react"
-import { type FormEvent, useState } from "react"
+import {
+  type ChangeEventHandler,
+  type FormEvent,
+  useCallback,
+  useState,
+} from "react"
 
 type ResetPasswordSearch = {
   error?: string
@@ -80,34 +85,53 @@ function ResetPasswordForm({ token }: { token: string }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isComplete, setIsComplete] = useState(false)
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setIsSubmitting(true)
-    setErrorMessage(null)
+  const submitResetPassword = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      setIsSubmitting(true)
+      setErrorMessage(null)
 
-    try {
-      if (password !== confirmPassword) {
-        throw new Error("Passwords do not match.")
+      try {
+        if (password !== confirmPassword) {
+          throw new Error("Passwords do not match.")
+        }
+
+        const result = await authClient.resetPassword({
+          newPassword: password,
+          token,
+        })
+
+        if (result.error) {
+          throw result.error
+        }
+
+        setPassword("")
+        setConfirmPassword("")
+        setIsComplete(true)
+      } catch (error) {
+        setErrorMessage(betterAuthErrorMessage(error))
+      } finally {
+        setIsSubmitting(false)
       }
-
-      const result = await authClient.resetPassword({
-        newPassword: password,
-        token,
-      })
-
-      if (result.error) {
-        throw result.error
-      }
-
-      setPassword("")
-      setConfirmPassword("")
-      setIsComplete(true)
-    } catch (error) {
-      setErrorMessage(betterAuthErrorMessage(error))
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
+    },
+    [confirmPassword, password, token]
+  )
+  const handleSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      void submitResetPassword(event)
+    },
+    [submitResetPassword]
+  )
+  const handlePasswordChange = useCallback<
+    ChangeEventHandler<HTMLInputElement>
+  >((event) => {
+    setPassword(event.target.value)
+  }, [])
+  const handleConfirmPasswordChange = useCallback<
+    ChangeEventHandler<HTMLInputElement>
+  >((event) => {
+    setConfirmPassword(event.target.value)
+  }, [])
 
   if (isComplete) {
     return (
@@ -125,7 +149,7 @@ function ResetPasswordForm({ token }: { token: string }) {
   }
 
   return (
-    <form onSubmit={(event) => void handleSubmit(event)}>
+    <form onSubmit={handleSubmit}>
       <KeyRoundIcon className="mb-3 size-8 text-muted-foreground" />
       <h1 className="text-xl font-semibold">Choose a new password</h1>
       <p className="mt-2 text-sm text-muted-foreground">
@@ -141,7 +165,7 @@ function ResetPasswordForm({ token }: { token: string }) {
             required
             minLength={8}
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={handlePasswordChange}
           />
         </div>
         <div className="grid gap-2">
@@ -152,7 +176,7 @@ function ResetPasswordForm({ token }: { token: string }) {
             required
             minLength={8}
             value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
+            onChange={handleConfirmPasswordChange}
           />
         </div>
         {errorMessage ? (

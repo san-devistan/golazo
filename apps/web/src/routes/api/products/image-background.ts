@@ -18,10 +18,9 @@ const PRODUCT_IMAGE_TYPES = new Set([
   "image/webp",
   "image/avif",
 ])
-const requireRuntime = createRequire(import.meta.url)
+const require = createRequire(import.meta.url)
 const BACKGROUND_REMOVAL_PUBLIC_PATH = pathToFileURL(
-  path.dirname(requireRuntime.resolve("@imgly/background-removal-node")) +
-    path.sep
+  path.dirname(require.resolve("@imgly/background-removal-node")) + path.sep
 ).href
 
 type BackgroundRemovalConfig = {
@@ -90,7 +89,7 @@ async function createForegroundCutout(image: Buffer, mimeType: string) {
 }
 
 function loadBackgroundRemoval() {
-  const module = requireRuntime("@imgly/background-removal-node")
+  const module = require("@imgly/background-removal-node")
 
   if (!isBackgroundRemovalNodeModule(module)) {
     throw new Error("Could not load the background removal tool.")

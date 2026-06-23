@@ -9,7 +9,7 @@ import {
   sortBySortOrder,
 } from "@/lib/shop"
 import { Link } from "@tanstack/react-router"
-/* eslint-disable complexity, max-lines, max-lines-per-function, no-underscore-dangle, react-perf/jsx-no-new-array-as-prop, react-perf/jsx-no-new-function-as-prop */
+/* eslint-disable complexity, max-lines, max-lines-per-function, react-perf/jsx-no-new-array-as-prop, react-perf/jsx-no-new-function-as-prop */
 import { api } from "@workspace/backend/api"
 import {
   AlertDialog,

@@ -13,7 +13,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@workspace/ui/components/collapsible"
-/* eslint-disable no-underscore-dangle */
 import { cn } from "@workspace/ui/lib/utils"
 import { ChevronDownIcon } from "lucide-react"
 

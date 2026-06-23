@@ -294,91 +294,122 @@ export const mergeAnonymousState = mutation({
   handler: async (ctx, args) => {
     const userTokenIdentifier = await requireViewerTokenIdentifier(ctx)
     const now = Date.now()
-
-    for (const productId of args.wishlistProductIds.slice(0, MAX_SYNC_ITEMS)) {
-      const existingItem = await ctx.db
-        .query("wishlistItems")
-        .withIndex("by_userTokenIdentifier_and_productId", (q) =>
-          q
-            .eq("userTokenIdentifier", userTokenIdentifier)
-            .eq("productId", productId)
-        )
-        .unique()
-
-      if (existingItem) {
-        continue
+    const wishlistProductIds = Array.from(
+      new Set(args.wishlistProductIds.slice(0, MAX_SYNC_ITEMS))
+    )
+    const cartItemsByConfigurationKey = new Map<
+      string,
+      {
+        item: (typeof args.cartItems)[number]
+        quantity: number
       }
-
-      const snapshot = await productSnapshot(ctx, productId)
-
-      if (!snapshot) {
-        continue
-      }
-
-      await ctx.db.insert("wishlistItems", {
-        userTokenIdentifier,
-        productId,
-        ...snapshot,
-        createdAt: now,
-        updatedAt: now,
-      })
-    }
+    >()
 
     for (const item of args.cartItems.slice(0, MAX_SYNC_ITEMS)) {
       const configurationKey = normalizeConfigurationKey(item.configurationKey)
       const quantity = normalizeQuantity(item.quantity)
-      let pricedProduct: Awaited<
-        ReturnType<typeof priceCartProductConfiguration>
-      >
+      const existingItem = cartItemsByConfigurationKey.get(configurationKey)
 
-      try {
-        pricedProduct = await priceCartProductConfiguration(
-          ctx,
-          item.productId,
-          item.configurationSummary
-        )
-      } catch {
-        continue
-      }
-
-      const existingItem = await ctx.db
-        .query("cartItems")
-        .withIndex("by_userTokenIdentifier_and_configurationKey", (q) =>
-          q
-            .eq("userTokenIdentifier", userTokenIdentifier)
-            .eq("configurationKey", configurationKey)
-        )
-        .unique()
-
-      if (existingItem) {
-        await ctx.db.patch(existingItem._id, {
-          configurationSummary: pricedProduct.configurationSummary,
-          productName: pricedProduct.productName,
-          productSlug: pricedProduct.productSlug,
-          imageUrl: pricedProduct.imageUrl,
-          unitPriceCents: pricedProduct.unitPriceCents,
-          currency: pricedProduct.currency,
-          quantity: normalizeQuantity(existingItem.quantity + quantity),
-          updatedAt: now,
-        })
-        continue
-      }
-
-      await ctx.db.insert("cartItems", {
-        userTokenIdentifier,
-        productId: item.productId,
-        configurationKey,
-        configurationSummary: pricedProduct.configurationSummary,
-        productName: pricedProduct.productName,
-        productSlug: pricedProduct.productSlug,
-        imageUrl: pricedProduct.imageUrl,
-        unitPriceCents: pricedProduct.unitPriceCents,
-        currency: pricedProduct.currency,
-        quantity,
-        createdAt: now,
-        updatedAt: now,
+      cartItemsByConfigurationKey.set(configurationKey, {
+        item,
+        quantity: existingItem
+          ? normalizeQuantity(existingItem.quantity + quantity)
+          : quantity,
       })
     }
+
+    await Promise.all(
+      wishlistProductIds.map(async (productId) => {
+        const existingItem = await ctx.db
+          .query("wishlistItems")
+          .withIndex("by_userTokenIdentifier_and_productId", (q) =>
+            q
+              .eq("userTokenIdentifier", userTokenIdentifier)
+              .eq("productId", productId)
+          )
+          .unique()
+
+        if (existingItem) {
+          return null
+        }
+
+        const snapshot = await productSnapshot(ctx, productId)
+
+        if (!snapshot) {
+          return null
+        }
+
+        await ctx.db.insert("wishlistItems", {
+          userTokenIdentifier,
+          productId,
+          ...snapshot,
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        return null
+      })
+    )
+
+    await Promise.all(
+      Array.from(cartItemsByConfigurationKey.entries()).map(
+        async ([configurationKey, { item, quantity }]) => {
+          let pricedProduct: Awaited<
+            ReturnType<typeof priceCartProductConfiguration>
+          >
+
+          try {
+            pricedProduct = await priceCartProductConfiguration(
+              ctx,
+              item.productId,
+              item.configurationSummary
+            )
+          } catch {
+            return null
+          }
+
+          const existingItem = await ctx.db
+            .query("cartItems")
+            .withIndex("by_userTokenIdentifier_and_configurationKey", (q) =>
+              q
+                .eq("userTokenIdentifier", userTokenIdentifier)
+                .eq("configurationKey", configurationKey)
+            )
+            .unique()
+
+          if (existingItem) {
+            await ctx.db.patch(existingItem._id, {
+              configurationSummary: pricedProduct.configurationSummary,
+              productName: pricedProduct.productName,
+              productSlug: pricedProduct.productSlug,
+              imageUrl: pricedProduct.imageUrl,
+              unitPriceCents: pricedProduct.unitPriceCents,
+              currency: pricedProduct.currency,
+              quantity: normalizeQuantity(existingItem.quantity + quantity),
+              updatedAt: now,
+            })
+            return null
+          }
+
+          await ctx.db.insert("cartItems", {
+            userTokenIdentifier,
+            productId: item.productId,
+            configurationKey,
+            configurationSummary: pricedProduct.configurationSummary,
+            productName: pricedProduct.productName,
+            productSlug: pricedProduct.productSlug,
+            imageUrl: pricedProduct.imageUrl,
+            unitPriceCents: pricedProduct.unitPriceCents,
+            currency: pricedProduct.currency,
+            quantity,
+            createdAt: now,
+            updatedAt: now,
+          })
+
+          return null
+        }
+      )
+    )
 
     return null
   },

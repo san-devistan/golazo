@@ -1,5 +1,3 @@
-/* eslint-disable no-underscore-dangle -- Email templates include order references. */
-
 import { type Infer } from "convex/values"
 
 import { deliveryNote } from "./emailDelivery"

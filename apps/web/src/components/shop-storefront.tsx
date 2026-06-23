@@ -10,7 +10,7 @@ import {
 } from "@/lib/customer-state"
 import { formatPrice, sortBySortOrder } from "@/lib/shop"
 import { Link } from "@tanstack/react-router"
-/* eslint-disable max-lines, no-underscore-dangle, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop */
+/* eslint-disable max-lines, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop */
 import { Button, buttonVariants } from "@workspace/ui/components/button"
 import {
   Carousel,

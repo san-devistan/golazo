@@ -1,7 +1,5 @@
 import { normalizeCatalogPath } from "@/lib/catalog-navigation"
 
-/* eslint-disable no-underscore-dangle */
-
 export type ShopHeaderCategory = {
   _id: string
   name: string

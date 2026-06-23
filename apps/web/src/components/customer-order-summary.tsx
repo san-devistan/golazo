@@ -1,5 +1,3 @@
-/* eslint-disable no-underscore-dangle */
-
 import { formatPrice } from "@/lib/shop"
 import { Badge } from "@workspace/ui/components/badge"
 import { buttonVariants } from "@workspace/ui/components/button"

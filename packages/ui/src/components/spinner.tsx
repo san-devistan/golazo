@@ -1,14 +1,18 @@
 import { cn } from "@workspace/ui/lib/utils"
-import { Loader2Icon, type LucideProps } from "lucide-react"
+import { Loader2Icon } from "lucide-react"
 
-function Spinner({ className, ...props }: LucideProps) {
+function Spinner({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<"output">) {
   return (
-    <Loader2Icon
-      role="status"
+    <output
       aria-label="Loading"
-      className={cn("size-4 animate-spin", className)}
+      className={cn("inline-grid size-4 place-items-center", className)}
       {...props}
-    />
+    >
+      <Loader2Icon aria-hidden="true" className="size-full animate-spin" />
+    </output>
   )
 }
 

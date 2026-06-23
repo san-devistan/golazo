@@ -37,9 +37,12 @@ function ChartLegendContent({
         className
       )}
     >
-      {payload
-        .filter((item) => item.type !== "none")
-        .map((item) => (
+      {payload.reduce<Array<React.ReactNode>>((items, item) => {
+        if (item.type === "none") {
+          return items
+        }
+
+        items.push(
           <ChartLegendItem
             key={getPayloadItemKey(item)}
             config={config}
@@ -47,7 +50,10 @@ function ChartLegendContent({
             item={item}
             nameKey={nameKey}
           />
-        ))}
+        )
+
+        return items
+      }, [])}
     </div>
   )
 }

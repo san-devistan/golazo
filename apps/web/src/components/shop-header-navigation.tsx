@@ -8,7 +8,6 @@ import {
 } from "@/components/shop-header-navigation-data"
 import { categoryHref } from "@/lib/catalog-navigation"
 import { Link } from "@tanstack/react-router"
-/* eslint-disable no-underscore-dangle */
 import { cn } from "@workspace/ui/lib/utils"
 
 export type { ShopHeaderCategory } from "@/components/shop-header-navigation-data"

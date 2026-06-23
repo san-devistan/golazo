@@ -32,7 +32,7 @@ type CarouselContextProps = {
 const CarouselContext = React.createContext<CarouselContextProps | null>(null)
 
 function useCarousel() {
-  const context = React.useContext(CarouselContext)
+  const context = React.use(CarouselContext)
 
   if (!context) {
     throw new Error("useCarousel must be used within a <Carousel />")
@@ -168,7 +168,6 @@ function CarouselItem({ className, ...props }: React.ComponentProps<"div">) {
 
   return (
     <div
-      role="group"
       aria-roledescription="slide"
       data-slot="carousel-item"
       className={cn(

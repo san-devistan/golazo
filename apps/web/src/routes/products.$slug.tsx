@@ -22,7 +22,7 @@ import {
 } from "@/lib/shop-queries"
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { Link, createFileRoute, useLocation } from "@tanstack/react-router"
-/* eslint-disable max-lines, max-lines-per-function, no-underscore-dangle, react/jsx-max-depth, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop */
+/* eslint-disable max-lines, max-lines-per-function, react/jsx-max-depth, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop */
 import { api } from "@workspace/backend/api"
 import {
   AlertDialog,
@@ -332,18 +332,23 @@ function buildCartConfigurationSummary(
   for (const option of detail.options) {
     if (option.config.type === "choice") {
       const selectedValue = configuration.choiceValues[option._id]
-      const selectedChoice = option.config.choices.find(
-        (choice) => choice.value === selectedValue
-      )
+      let selectedChoiceLabel: string | null = null
 
-      if (option.isRequired && !selectedChoice) {
+      for (const choice of option.config.choices) {
+        if (choice.value === selectedValue) {
+          selectedChoiceLabel = choice.label
+          break
+        }
+      }
+
+      if (option.isRequired && !selectedChoiceLabel) {
         throw new Error(`Choose ${displayOptionLabel(option.label)}.`)
       }
 
-      if (selectedChoice) {
+      if (selectedChoiceLabel) {
         summary.push({
           label: displayOptionLabel(option.label),
-          value: selectedChoice.label,
+          value: selectedChoiceLabel,
         })
       }
       continue

@@ -1,4 +1,4 @@
-/* eslint-disable max-lines, no-await-in-loop, no-underscore-dangle */
+/* eslint-disable max-lines, no-await-in-loop */
 
 import { v, type Infer } from "convex/values"
 

@@ -44,7 +44,7 @@ function InputOTPSlot({
 }: React.ComponentProps<"div"> & {
   index: number
 }) {
-  const inputOTPContext = React.useContext(OTPInputContext)
+  const inputOTPContext = React.use(OTPInputContext)
   const { char, hasFakeCaret, isActive } = inputOTPContext.slots[index]
 
   return (
@@ -72,7 +72,6 @@ function InputOTPSeparator({ ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="input-otp-separator"
       className="flex items-center [&_svg:not([class*='size-'])]:size-4"
-      role="separator"
       {...props}
     >
       <MinusIcon />
