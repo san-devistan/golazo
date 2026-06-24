@@ -1,10 +1,10 @@
 import { hasConvexUrl } from "@/lib/shop"
-import { OrderPanel } from "@/routes/admin/orders/panel"
+import { OrderPanel } from "@/routes/admin/orders/-panel"
 import {
   EMPTY_ORDER_RECORDS,
   type AdminOrderRecord,
   type UpdateFulfillmentInput,
-} from "@/routes/admin/orders/types"
+} from "@/routes/admin/orders/-types"
 import { Link } from "@tanstack/react-router"
 import { api } from "@workspace/backend/api"
 import { Badge } from "@workspace/ui/components/badge"

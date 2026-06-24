@@ -1,4 +1,5 @@
 import { ShopStorefront } from "@/components/shop-storefront"
+import { BASE_CURRENCY } from "@/lib/money"
 import {
   centsToPriceInput,
   displayOptionLabel,
@@ -324,7 +325,7 @@ function emptyProductForm(
     name: "",
     description: "",
     basePrice: "89.00",
-    currency: "EUR",
+    currency: BASE_CURRENCY,
     status: "published",
     sku: "",
     cloudinaryAssetFolder: "",
@@ -351,7 +352,7 @@ function productRecordToForm(record: AdminProductRecord): ProductFormState {
     name: record.product.name,
     description: record.product.description,
     basePrice: centsToPriceInput(record.product.basePriceCents),
-    currency: record.product.currency,
+    currency: BASE_CURRENCY,
     status: productVisibilityStatus(record.product.status),
     sku: record.product.sku ?? "",
     cloudinaryAssetFolder: record.product.cloudinaryAssetFolder ?? "",
@@ -873,7 +874,7 @@ function useAdminCatalogWorkspaceElement({
         name: productForm.name,
         description: productForm.description,
         basePriceCents: priceInputToCents(productForm.basePrice),
-        currency: productForm.currency,
+        currency: BASE_CURRENCY,
         status: productForm.status,
         sku: nullableText(productForm.sku),
         cloudinaryAssetFolder: null,
@@ -1215,7 +1216,7 @@ export function AdminProductEditorDialog({
         name: productForm.name,
         description: productForm.description,
         basePriceCents: priceInputToCents(productForm.basePrice),
-        currency: productForm.currency,
+        currency: BASE_CURRENCY,
         status: productForm.status,
         sku: nullableText(productForm.sku),
         cloudinaryAssetFolder: null,
@@ -1631,7 +1632,7 @@ function ProductBasicsForm({
         </div>
       )}
       <div className="space-y-2">
-        <Label htmlFor="product-price">Base price</Label>
+        <Label htmlFor="product-price">Base price ({BASE_CURRENCY})</Label>
         <Input
           id="product-price"
           value={form.basePrice}
@@ -1641,20 +1642,10 @@ function ProductBasicsForm({
             )
           }
         />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="product-currency">Currency</Label>
-        <Input
-          id="product-currency"
-          value={form.currency}
-          onChange={(event) =>
-            onChange((current) =>
-              current
-                ? { ...current, currency: event.target.value.toUpperCase() }
-                : current
-            )
-          }
-        />
+        <p className="text-xs text-muted-foreground">
+          Product prices are entered in EUR. Customer currency conversion
+          happens on the storefront.
+        </p>
       </div>
     </section>
   )
@@ -1935,7 +1926,7 @@ function TemplateActivationForm({
                       ? template.config.choices
                           .map((choice) => choice.label)
                           .join(", ")
-                      : `${formatPrice(template.priceDeltaCents, "EUR")} extra`}
+                      : `${formatPrice(template.priceDeltaCents, BASE_CURRENCY)} extra`}
                   </span>
                 </span>
               </label>

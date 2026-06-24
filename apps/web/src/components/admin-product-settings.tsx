@@ -3,6 +3,7 @@ import {
   displayOptionLabel,
   getErrorMessage,
   priceInputToCents,
+  slugify,
   sortBySortOrder,
 } from "@/lib/shop"
 import { Link } from "@tanstack/react-router"
@@ -720,6 +721,10 @@ function buildSizeSaveInput(
     return { input: null, message: "Add at least one size." }
   }
 
+  if (hasDuplicateNormalizedValues(values)) {
+    return { input: null, message: "Size values must be unique." }
+  }
+
   return {
     input: {
       templateId,
@@ -748,6 +753,10 @@ function buildFlockingSaveInput(
 
   if (fields.length === 0) {
     return { input: null, message: "Add at least one flocking field." }
+  }
+
+  if (hasDuplicateNormalizedValues(fields)) {
+    return { input: null, message: "Flocking fields must be unique." }
   }
 
   return {
@@ -886,5 +895,20 @@ function activeRowValues(rows: Array<EditableRow>) {
     const value = row.value.trim()
 
     return value ? [value] : []
+  })
+}
+
+function hasDuplicateNormalizedValues(values: Array<string>) {
+  const seenValues = new Set<string>()
+
+  return values.some((value) => {
+    const normalizedValue = slugify(value)
+
+    if (seenValues.has(normalizedValue)) {
+      return true
+    }
+
+    seenValues.add(normalizedValue)
+    return false
   })
 }

@@ -1,4 +1,4 @@
-import { formatPrice } from "@/lib/shop"
+import { useMoneyFormatter } from "@/lib/preferences"
 import { Badge } from "@workspace/ui/components/badge"
 import { buttonVariants } from "@workspace/ui/lib/button-variants"
 import { cn } from "@workspace/ui/lib/utils"
@@ -90,6 +90,7 @@ export function CustomerOrderSummary({
   record: CustomerOrderRecord
   priority?: boolean
 }) {
+  const formatPrice = useMoneyFormatter()
   const { order } = record
   const commandId = order.commandId ?? shortId(order._id)
   const currentStatus = orderFlowStatus(order)

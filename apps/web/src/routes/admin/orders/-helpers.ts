@@ -5,7 +5,7 @@ import {
   type FulfillmentFormState,
   type FulfillmentStatus,
   type ShippingAddress,
-} from "@/routes/admin/orders/types"
+} from "@/routes/admin/orders/-types"
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "short",

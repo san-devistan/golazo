@@ -3,13 +3,13 @@ import { ShopFooter } from "@/components/shop-footer"
 import { ShopHeader, type ShopHeaderCategory } from "@/components/shop-header"
 import { authClient } from "@/lib/auth-client"
 import { hasConvexUrl } from "@/lib/shop"
-import { OrdersSection } from "@/routes/account/orders"
-import { ProfileSection } from "@/routes/account/profile"
+import { OrdersSection } from "@/routes/account/-orders"
+import { ProfileSection } from "@/routes/account/-profile"
 import {
   AccountLoading,
   MissingBackend,
   SignInRequired,
-} from "@/routes/account/states"
+} from "@/routes/account/-states"
 import { Link } from "@tanstack/react-router"
 import { api } from "@workspace/backend/api"
 import { Button } from "@workspace/ui/components/button"

@@ -1,5 +1,5 @@
 import { formatPrice, getErrorMessage } from "@/lib/shop"
-import { OrderContactDetails, OrderId } from "@/routes/admin/orders/fields"
+import { OrderContactDetails, OrderId } from "@/routes/admin/orders/-fields"
 import {
   formatDateTime,
   formatShippingAddress,
@@ -9,16 +9,16 @@ import {
   orderDate,
   orderToFormState,
   shortId,
-} from "@/routes/admin/orders/helpers"
-import { OrderItemRow } from "@/routes/admin/orders/item-row"
-import { InlineStatusSelect } from "@/routes/admin/orders/status-select"
+} from "@/routes/admin/orders/-helpers"
+import { OrderItemRow } from "@/routes/admin/orders/-item-row"
+import { InlineStatusSelect } from "@/routes/admin/orders/-status-select"
 import {
   DROP_ID_FIELD,
   TRACK_ID_FIELD,
   type AdminOrderRecord,
   type FulfillmentStatus,
   type UpdateFulfillmentInput,
-} from "@/routes/admin/orders/types"
+} from "@/routes/admin/orders/-types"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"

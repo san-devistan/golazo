@@ -4,6 +4,7 @@ import { ShopHeader } from "@/components/shop-header"
 import { ShopHierarchyNav } from "@/components/shop-hierarchy-nav"
 import { SizeGuideDialog } from "@/components/size-guide-dialog"
 import { WishlistHeartButton } from "@/components/wishlist-heart-button"
+import { requireAdminAuth } from "@/lib/admin-auth"
 import { readCatalogBackHrefSearch } from "@/lib/catalog-back-state"
 import { categoryHref } from "@/lib/catalog-navigation"
 import {
@@ -11,12 +12,8 @@ import {
   cartConfigurationKey,
   useCustomerState,
 } from "@/lib/customer-state"
-import {
-  displayOptionLabel,
-  formatPrice,
-  getErrorMessage,
-  hasConvexUrl,
-} from "@/lib/shop"
+import { useMoneyFormatter } from "@/lib/preferences"
+import { displayOptionLabel, getErrorMessage, hasConvexUrl } from "@/lib/shop"
 import {
   productDetailQueryOptions,
   type ProductRouteMode,
@@ -57,6 +54,11 @@ import { type SetStateAction, useMemo, useReducer } from "react"
 export const Route = createFileRoute("/products/$slug")({
   validateSearch: validateProductSearch,
   loaderDeps: ({ search }) => ({ mode: productRouteMode(search) }),
+  beforeLoad: async ({ location, search }) => {
+    if (productRouteMode(search) === "admin") {
+      await requireAdminAuth(location.href)
+    }
+  },
   loader: async ({ params, deps, context: { queryClient } }) => {
     if (!hasConvexUrl()) {
       return
@@ -530,6 +532,7 @@ function useProductConfiguratorElement({
 }) {
   const deleteProduct = useAction(api.cloudinary.deleteProduct)
   const customerState = useCustomerState()
+  const formatPrice = useMoneyFormatter()
   const [state, dispatch] = useReducer(
     productConfiguratorReducer,
     detail,
@@ -1002,6 +1005,7 @@ function ChoiceOptionControl({
   currency: string
 }) {
   const label = displayOptionLabel(option.label)
+  const formatPrice = useMoneyFormatter()
 
   return (
     <div className="grid gap-3 sm:grid-cols-[96px_1fr] sm:items-start">
@@ -1122,6 +1126,7 @@ function PersonalizationOptionControl({
   currency: string
 }) {
   const label = displayOptionLabel(option.label)
+  const formatPrice = useMoneyFormatter()
 
   return (
     <div className="grid gap-3 sm:grid-cols-[96px_1fr] sm:items-start">

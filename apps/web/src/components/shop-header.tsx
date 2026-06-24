@@ -1,10 +1,12 @@
 import { CustomerActions } from "@/components/customer-actions"
+import { LocaleCurrencySwitcher } from "@/components/locale-currency-switcher"
 import { ShopHeaderMobileNavigation } from "@/components/shop-header-mobile-navigation"
 import { ShopHeaderNavigation } from "@/components/shop-header-navigation"
 import type {
   ShopHeaderCategory,
   ShopHeaderMode,
 } from "@/components/shop-header-navigation-data"
+import { useTranslation } from "@/lib/preferences"
 import { Link } from "@tanstack/react-router"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -70,16 +72,19 @@ function ShopHeaderBrand({ adminMode }: { adminMode: boolean }) {
 }
 
 function ShopHeaderActions() {
+  const t = useTranslation()
+
   return (
     <div className="ml-auto flex min-w-0 items-center gap-2">
       <div className="hidden h-9 w-52 items-center bg-[#f1f1f1] px-3 lg:flex">
         <input
-          aria-label="Search products"
-          placeholder="Rechercher"
+          aria-label={t("searchProducts")}
+          placeholder={t("searchProducts")}
           className="min-w-0 flex-1 bg-transparent text-sm outline-none"
         />
         <SearchIcon className="size-5" />
       </div>
+      <LocaleCurrencySwitcher />
       <CustomerActions />
     </div>
   )
@@ -102,6 +107,7 @@ function ShopHeaderMobileMenu({
 }) {
   const handleOpenMenu = useCallback(() => onOpenChange(true), [onOpenChange])
   const handleNavigate = useCallback(() => onOpenChange(false), [onOpenChange])
+  const t = useTranslation()
 
   if (categories.length === 0) {
     return null
@@ -113,7 +119,7 @@ function ShopHeaderMobileMenu({
         type="button"
         variant="ghost"
         size="icon-lg"
-        aria-label="Open navigation menu"
+        aria-label={t("openNavigationMenu")}
         aria-haspopup="dialog"
         aria-expanded={open}
         className="rounded-none lg:hidden"
@@ -124,7 +130,7 @@ function ShopHeaderMobileMenu({
       <SheetContent side="left" className="gap-0 rounded-none p-0">
         <SheetHeader className="border-b border-border px-4 py-4">
           <SheetTitle className="font-oswald text-3xl leading-none font-black tracking-tight uppercase">
-            Menu
+            {t("menu")}
           </SheetTitle>
         </SheetHeader>
         <ShopHeaderMobileNavigation

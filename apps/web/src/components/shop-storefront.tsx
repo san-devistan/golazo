@@ -9,7 +9,8 @@ import {
   type ProductId as CustomerProductId,
   useCustomerState,
 } from "@/lib/customer-state"
-import { formatPrice, sortBySortOrder } from "@/lib/shop"
+import { useMoneyFormatter } from "@/lib/preferences"
+import { sortBySortOrder } from "@/lib/shop"
 import { Link } from "@tanstack/react-router"
 /* eslint-disable max-lines, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop */
 import { Button } from "@workspace/ui/components/button"
@@ -1377,6 +1378,7 @@ function ProductCard<TProduct extends StorefrontProduct>({
 }) {
   const productSnapshot = customerProductSnapshot(product)
   const isFavorite = customerState.isWishlistProduct(productSnapshot.productId)
+  const formatPrice = useMoneyFormatter()
 
   return (
     <article className={className}>

@@ -1,15 +1,58 @@
 import { AdminCatalogWorkspace } from "@/components/admin-catalog-workspace"
+import { AdminPasswordGate } from "@/components/admin-password-gate"
+import { getAdminAuthState, normalizeAdminRedirect } from "@/lib/admin-auth"
 import { hasConvexUrl } from "@/lib/shop"
-import { Outlet, createFileRoute, useLocation } from "@tanstack/react-router"
+import {
+  Outlet,
+  createFileRoute,
+  redirect,
+  useLocation,
+} from "@tanstack/react-router"
 import { Toaster } from "@workspace/ui/components/sonner"
 
-export const Route = createFileRoute("/admin")({ component: AdminLayout })
+type AdminSearch = {
+  redirect?: string
+}
+
+export const Route = createFileRoute("/admin")({
+  validateSearch: validateAdminSearch,
+  beforeLoad: async ({ location }) => {
+    const adminAuth = await getAdminAuthState()
+
+    if (!adminAuth.isAuthenticated && !isAdminEntryPath(location.pathname)) {
+      throw redirect({
+        to: "/admin",
+        search: {
+          redirect: normalizeAdminRedirect(location.href) ?? "/admin",
+        },
+      })
+    }
+
+    return { adminAuth }
+  },
+  component: AdminLayout,
+})
+
+function validateAdminSearch(search: Record<string, unknown>): AdminSearch {
+  const redirectTo = normalizeAdminRedirect(search.redirect)
+
+  return redirectTo ? { redirect: redirectTo } : {}
+}
 
 function AdminLayout() {
+  const { adminAuth } = Route.useRouteContext()
+  const { redirect: redirectTo } = Route.useSearch()
   const location = useLocation()
   let content: React.ReactNode
 
-  if (location.pathname === "/admin" || location.pathname === "/admin/") {
+  if (!adminAuth.isConfigured || !adminAuth.isAuthenticated) {
+    content = (
+      <AdminPasswordGate
+        isConfigured={adminAuth.isConfigured}
+        redirectTo={redirectTo}
+      />
+    )
+  } else if (isAdminEntryPath(location.pathname)) {
     if (!hasConvexUrl()) {
       content = <MissingBackend />
     } else {
@@ -25,6 +68,10 @@ function AdminLayout() {
       <Toaster closeButton position="bottom-right" richColors theme="light" />
     </>
   )
+}
+
+function isAdminEntryPath(pathname: string) {
+  return pathname === "/admin" || pathname === "/admin/"
 }
 
 function MissingBackend() {

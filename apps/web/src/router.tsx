@@ -1,4 +1,5 @@
 import { authClient } from "@/lib/auth-client"
+import { AppPreferencesProvider } from "@/lib/preferences"
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react"
 import { ConvexQueryClient } from "@convex-dev/react-query"
 import { QueryClient } from "@tanstack/react-query"
@@ -46,16 +47,18 @@ export function getRouter() {
 
   function ConvexProviderWrapper({ children }: { children: ReactNode }) {
     if (!convexQueryClient) {
-      return <>{children}</>
+      return <AppPreferencesProvider>{children}</AppPreferencesProvider>
     }
 
     return (
-      <ConvexBetterAuthProvider
-        client={convexQueryClient.convexClient}
-        authClient={authClient}
-      >
-        {children}
-      </ConvexBetterAuthProvider>
+      <AppPreferencesProvider>
+        <ConvexBetterAuthProvider
+          client={convexQueryClient.convexClient}
+          authClient={authClient}
+        >
+          {children}
+        </ConvexBetterAuthProvider>
+      </AppPreferencesProvider>
     )
   }
 

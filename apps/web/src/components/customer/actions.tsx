@@ -3,12 +3,14 @@ import { CartSheet } from "@/components/customer/cart-sheet"
 import { HeaderIconButton } from "@/components/customer/icon-button"
 import { WishlistSheet } from "@/components/customer/wishlist-sheet"
 import { useCustomerState } from "@/lib/customer-state"
+import { useTranslation } from "@/lib/preferences"
 import { useNavigate } from "@tanstack/react-router"
 import { HeartIcon, ShoppingBagIcon, UserIcon } from "lucide-react"
 import { useCallback, useState } from "react"
 
 export function CustomerActions() {
   const navigate = useNavigate()
+  const t = useTranslation()
   const {
     cartCount,
     cartItems,
@@ -59,20 +61,24 @@ export function CustomerActions() {
   return (
     <>
       <HeaderIconButton
-        label={isAuthenticated ? "Account" : "Sign in"}
+        label={isAuthenticated ? t("account") : t("signIn")}
         isActive={isAuthenticated}
         onClick={handleAccountClick}
       >
         <UserIcon className="size-5" />
       </HeaderIconButton>
       <HeaderIconButton
-        label="Wishlist"
+        label={t("wishlist")}
         count={wishlistCount}
         onClick={handleWishlistOpen}
       >
         <HeartIcon className="size-5" />
       </HeaderIconButton>
-      <HeaderIconButton label="Cart" count={cartCount} onClick={handleCartOpen}>
+      <HeaderIconButton
+        label={t("cart")}
+        count={cartCount}
+        onClick={handleCartOpen}
+      >
         <ShoppingBagIcon className="size-5" />
       </HeaderIconButton>
 

@@ -1,6 +1,6 @@
 import { formatPrice } from "@/lib/shop"
-import { metadataLinkHref } from "@/routes/admin/orders/helpers"
-import type { AdminOrderRecord } from "@/routes/admin/orders/types"
+import { metadataLinkHref } from "@/routes/admin/orders/-helpers"
+import type { AdminOrderRecord } from "@/routes/admin/orders/-types"
 import { PackageIcon } from "lucide-react"
 
 export function OrderItemRow({

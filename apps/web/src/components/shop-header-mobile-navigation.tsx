@@ -7,6 +7,7 @@ import {
   type ShopHeaderMode,
 } from "@/components/shop-header-navigation-data"
 import { categoryHref } from "@/lib/catalog-navigation"
+import { useTranslation } from "@/lib/preferences"
 import { Link } from "@tanstack/react-router"
 import {
   Collapsible,
@@ -74,6 +75,7 @@ function ShopHeaderMobileNavigationItem({
   mode: ShopHeaderMode
   onNavigate?: () => void
 }) {
+  const t = useTranslation()
   const subCategories =
     categoriesByParentId.get(category._id) ?? EMPTY_HEADER_CATEGORIES
   const isActive = isCategoryActive(
@@ -114,7 +116,7 @@ function ShopHeaderMobileNavigationItem({
               category={category}
               currentCategoryId={currentCategoryId}
               currentCategoryPath={currentCategoryPath}
-              label="Tout voir"
+              label={t("viewAll")}
               mode={mode}
               onNavigate={onNavigate}
             />

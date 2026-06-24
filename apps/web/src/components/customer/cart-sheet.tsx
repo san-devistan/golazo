@@ -1,7 +1,8 @@
 import { ProductThumb } from "@/components/customer/product-thumb"
 import { displayCartConfigurationValue } from "@/components/customer/utils"
 import type { CustomerCartItem } from "@/lib/customer-state"
-import { formatPrice, getErrorMessage } from "@/lib/shop"
+import { useMoneyFormatter, useTranslation } from "@/lib/preferences"
+import { getErrorMessage } from "@/lib/shop"
 import { Link } from "@tanstack/react-router"
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -37,16 +38,18 @@ export function CartSheet({
   onRemoveItem: (configurationKey: string) => Promise<void>
   onSetQuantity: (configurationKey: string, quantity: number) => Promise<void>
 }) {
+  const formatPrice = useMoneyFormatter()
+  const t = useTranslation()
   const totalCents = items.reduce(
     (total, item) => total + item.unitPriceCents * item.quantity,
     0
   )
   const productCount = items.reduce((total, item) => total + item.quantity, 0)
-  const productCountLabel = `${productCount} ${
-    productCount === 1 ? "Product" : "Products"
-  }`
+  const productCountLabel = `${productCount} ${t(
+    productCount === 1 ? "productSingular" : "productPlural"
+  )}`
   const currency = items[0]?.currency ?? "EUR"
-  const checkoutLabel = isAuthenticated ? "Checkout" : "Sign in to checkout"
+  const checkoutLabel = isAuthenticated ? t("checkout") : t("signInToCheckout")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handleOpenChange = useCallback(
@@ -106,7 +109,7 @@ export function CartSheet({
       <SheetContent side="right" className="gap-1 rounded-none sm:max-w-md">
         <SheetHeader className="pb-1">
           <SheetTitle className="font-oswald text-2xl font-bold tracking-wide uppercase">
-            CART
+            {t("cartTitle")}
           </SheetTitle>
         </SheetHeader>
         {errorMessage ? (
@@ -120,7 +123,7 @@ export function CartSheet({
         <div className="min-h-0 flex-1 overflow-y-auto px-4">
           {items.length === 0 ? (
             <p className="py-10 text-sm text-muted-foreground">
-              Your cart is empty.
+              {t("cartEmpty")}
             </p>
           ) : (
             <div className="divide-y">
@@ -150,7 +153,7 @@ export function CartSheet({
               onClick={handleCheckoutClick}
             >
               <ShoppingBagIcon className="size-4" />
-              {isCheckingOut ? "Opening checkout" : checkoutLabel}
+              {isCheckingOut ? t("openingCheckout") : checkoutLabel}
             </Button>
           </SheetFooter>
         )}
@@ -168,6 +171,8 @@ function CartItemRow({
   onRemoveItem: (configurationKey: string) => void
   onSetQuantity: (configurationKey: string, quantity: number) => void
 }) {
+  const formatPrice = useMoneyFormatter()
+  const t = useTranslation()
   const productParams = useMemo(
     () => ({ slug: item.productSlug }),
     [item.productSlug]
@@ -198,7 +203,7 @@ function CartItemRow({
         <CartConfigurationSummary item={item} />
         <button
           type="button"
-          aria-label="Remove from cart"
+          aria-label={t("removeFromCart")}
           className="absolute top-0 right-0 grid size-8 place-items-center text-muted-foreground transition hover:text-foreground"
           onClick={handleRemoveItem}
         >
@@ -244,11 +249,13 @@ function QuantityControl({
   onDecrease: () => void
   onIncrease: () => void
 }) {
+  const t = useTranslation()
+
   return (
     <div className="inline-grid grid-cols-[32px_40px_32px] bg-muted">
       <button
         type="button"
-        aria-label="Decrease quantity"
+        aria-label={t("decreaseQuantity")}
         className="grid size-8 place-items-center"
         onClick={onDecrease}
       >
@@ -259,7 +266,7 @@ function QuantityControl({
       </div>
       <button
         type="button"
-        aria-label="Increase quantity"
+        aria-label={t("increaseQuantity")}
         className="grid size-8 place-items-center"
         onClick={onIncrease}
       >

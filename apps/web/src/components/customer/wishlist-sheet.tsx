@@ -1,6 +1,6 @@
 import { ProductThumb } from "@/components/customer/product-thumb"
 import type { CustomerWishlistItem } from "@/lib/customer-state"
-import { formatPrice } from "@/lib/shop"
+import { useMoneyFormatter, useTranslation } from "@/lib/preferences"
 import { Link } from "@tanstack/react-router"
 import {
   Sheet,
@@ -19,18 +19,20 @@ export function WishlistSheet({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const t = useTranslation()
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="gap-1 rounded-none sm:max-w-md">
         <SheetHeader className="pb-1">
           <SheetTitle className="font-oswald text-2xl font-bold tracking-wide uppercase">
-            WISHLIST
+            {t("wishlistTitle")}
           </SheetTitle>
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto px-4">
           {items.length === 0 ? (
             <p className="py-10 text-sm text-muted-foreground">
-              No saved products yet.
+              {t("wishlistEmpty")}
             </p>
           ) : (
             <div className="divide-y">
@@ -46,6 +48,7 @@ export function WishlistSheet({
 }
 
 function WishlistItem({ item }: { item: CustomerWishlistItem }) {
+  const formatPrice = useMoneyFormatter()
   const productParams = useMemo(
     () => ({ slug: item.productSlug }),
     [item.productSlug]
