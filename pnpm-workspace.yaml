@@ -7,6 +7,8 @@ minimumReleaseAge: 10080
 allowBuilds:
   esbuild: true
   msw: false
+  onnxruntime-node: true
+  sharp: true
 
 overrides:
   sharp: ^0.34.5

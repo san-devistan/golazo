@@ -16,6 +16,7 @@ import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as ProductsSlugRouteImport } from './routes/products.$slug'
+import { Route as PagesPageIdRouteImport } from './routes/pages.$pageId'
 import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as CategoriesCategoryIdRouteImport } from './routes/categories.$categoryId'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
@@ -60,6 +61,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const ProductsSlugRoute = ProductsSlugRouteImport.update({
   id: '/products/$slug',
   path: '/products/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PagesPageIdRoute = PagesPageIdRouteImport.update({
+  id: '/pages/$pageId',
+  path: '/pages/$pageId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/categories/$categoryId': typeof CategoriesCategoryIdRoute
   '/checkout/success': typeof CheckoutSuccessRoute
+  '/pages/$pageId': typeof PagesPageIdRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/categories/$categoryId': typeof CategoriesCategoryIdRoute
   '/checkout/success': typeof CheckoutSuccessRoute
+  '/pages/$pageId': typeof PagesPageIdRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/categories/$categoryId': typeof CategoriesCategoryIdRoute
   '/checkout/success': typeof CheckoutSuccessRoute
+  '/pages/$pageId': typeof PagesPageIdRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
@@ -186,6 +195,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/categories/$categoryId'
     | '/checkout/success'
+    | '/pages/$pageId'
     | '/products/$slug'
     | '/admin/'
     | '/admin/categories/$categoryId'
@@ -204,6 +214,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/categories/$categoryId'
     | '/checkout/success'
+    | '/pages/$pageId'
     | '/products/$slug'
     | '/admin'
     | '/admin/categories/$categoryId'
@@ -223,6 +234,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/categories/$categoryId'
     | '/checkout/success'
+    | '/pages/$pageId'
     | '/products/$slug'
     | '/admin/'
     | '/admin/categories/$categoryId'
@@ -239,6 +251,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   CategoriesCategoryIdRoute: typeof CategoriesCategoryIdRoute
   CheckoutSuccessRoute: typeof CheckoutSuccessRoute
+  PagesPageIdRoute: typeof PagesPageIdRoute
   ProductsSlugRoute: typeof ProductsSlugRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiProductsImageBackgroundRoute: typeof ApiProductsImageBackgroundRoute
@@ -293,6 +306,13 @@ declare module '@tanstack/react-router' {
       path: '/products/$slug'
       fullPath: '/products/$slug'
       preLoaderRoute: typeof ProductsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pages/$pageId': {
+      id: '/pages/$pageId'
+      path: '/pages/$pageId'
+      fullPath: '/pages/$pageId'
+      preLoaderRoute: typeof PagesPageIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/checkout/success': {
@@ -398,6 +418,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   CategoriesCategoryIdRoute: CategoriesCategoryIdRoute,
   CheckoutSuccessRoute: CheckoutSuccessRoute,
+  PagesPageIdRoute: PagesPageIdRoute,
   ProductsSlugRoute: ProductsSlugRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiProductsImageBackgroundRoute: ApiProductsImageBackgroundRoute,

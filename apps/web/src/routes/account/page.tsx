@@ -1,4 +1,5 @@
 import type { CustomerOrderRecord } from "@/components/customer-order-summary"
+import { ShopFooter } from "@/components/shop-footer"
 import { ShopHeader, type ShopHeaderCategory } from "@/components/shop-header"
 import { authClient } from "@/lib/auth-client"
 import { hasConvexUrl } from "@/lib/shop"
@@ -65,6 +66,7 @@ function AccountDashboard() {
           <SignInRequired />
         )}
       </section>
+      <ShopFooter categories={categories} />
     </main>
   )
 }

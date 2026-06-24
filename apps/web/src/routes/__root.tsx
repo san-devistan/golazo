@@ -1,4 +1,3 @@
-import { ThemeProvider } from "@/components/theme-provider"
 import type { QueryClient } from "@tanstack/react-query"
 import {
   HeadContent,
@@ -50,12 +49,12 @@ export const Route = createRootRouteWithContext<{
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <head>
         <HeadContent />
       </head>
       <body className="min-h-svh bg-background text-foreground">
-        <ThemeProvider>{children}</ThemeProvider>
+        {children}
         <Scripts />
       </body>
     </html>

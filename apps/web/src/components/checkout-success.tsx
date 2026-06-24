@@ -2,6 +2,7 @@ import {
   CustomerOrderSummary,
   type CustomerOrderRecord,
 } from "@/components/customer-order-summary"
+import { ShopFooter } from "@/components/shop-footer"
 import { ShopHeader, type ShopHeaderCategory } from "@/components/shop-header"
 import { authClient } from "@/lib/auth-client"
 import { Link } from "@tanstack/react-router"
@@ -49,6 +50,7 @@ function CheckoutSuccess({ search }: { search: CheckoutSuccessSearch }) {
           <UnmatchedSuccess />
         )}
       </section>
+      <ShopFooter categories={categories} />
     </main>
   )
 }

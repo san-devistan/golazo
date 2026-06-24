@@ -22,7 +22,7 @@ function AdminLayout() {
   return (
     <>
       {content}
-      <Toaster closeButton position="bottom-right" richColors />
+      <Toaster closeButton position="bottom-right" richColors theme="light" />
     </>
   )
 }

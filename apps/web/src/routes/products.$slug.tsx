@@ -1,4 +1,5 @@
 import { AdminProductEditorDialog } from "@/components/admin-catalog-workspace"
+import { ShopFooter } from "@/components/shop-footer"
 import { ShopHeader } from "@/components/shop-header"
 import { ShopHierarchyNav } from "@/components/shop-hierarchy-nav"
 import { SizeGuideDialog } from "@/components/size-guide-dialog"
@@ -594,6 +595,11 @@ function useProductConfiguratorElement({
     () => visibleProductMetadata(detail.metadata),
     [detail.metadata]
   )
+  const hasSizeOption = detail.options.some(
+    (option) =>
+      isChoiceOption(option) &&
+      isSizeOptionLabel(displayOptionLabel(option.label))
+  )
   const selectedImage =
     galleryImages[selectedImageIndex] ?? galleryImages[0] ?? null
   const isFavorite = customerState.isWishlistProduct(detail.product._id)
@@ -773,7 +779,13 @@ function useProductConfiguratorElement({
               </>
             )}
 
-            <div className="mt-10 space-y-6">
+            <div className="mt-4 space-y-6">
+              {hasSizeOption && (
+                <div className="flex justify-start">
+                  <SizeGuideDialog />
+                </div>
+              )}
+
               {detail.options.map((option) => {
                 if (isChoiceOption(option)) {
                   return (
@@ -864,6 +876,7 @@ function useProductConfiguratorElement({
           </aside>
         </div>
       </div>
+      {mode !== "admin" && <ShopFooter categories={detail.categories} />}
       {mode === "admin" && (
         <>
           <AdminProductEditorDialog
@@ -989,17 +1002,11 @@ function ChoiceOptionControl({
   currency: string
 }) {
   const label = displayOptionLabel(option.label)
-  const showSizeGuide = isSizeOptionLabel(label)
 
   return (
     <div className="grid gap-3 sm:grid-cols-[96px_1fr] sm:items-start">
       <div className="pt-2 text-sm font-medium">{label}</div>
       <div className="flex flex-col gap-2">
-        {showSizeGuide && (
-          <div className="flex justify-start sm:justify-end">
-            <SizeGuideDialog />
-          </div>
-        )}
         <div className="flex flex-wrap gap-2">
           {!option.isRequired && (
             <label

@@ -1,3 +1,4 @@
+import { ShopFooter } from "@/components/shop-footer"
 import { ShopHeader } from "@/components/shop-header"
 import { ShopHierarchyNav } from "@/components/shop-hierarchy-nav"
 import { WishlistHeartButton } from "@/components/wishlist-heart-button"
@@ -336,6 +337,7 @@ export function ShopStorefront<
           onReorderProducts={onReorderProducts}
         />
       </section>
+      {!isAdmin && <ShopFooter categories={categories} />}
     </main>
   )
 }
@@ -728,6 +730,7 @@ function CategoryPageContent<
       {showDirectProducts && (
         <ProductSection
           categoryId={currentCategory._id}
+          className="mt-8"
           currentPageHref={currentPageHref}
           mode={mode}
           products={directProducts}
@@ -760,6 +763,7 @@ function CategoryPageContent<
 function ProductSection<TProduct extends StorefrontProduct>({
   categoryId,
   currentPageHref,
+  className,
   mode,
   products,
   title,
@@ -770,6 +774,7 @@ function ProductSection<TProduct extends StorefrontProduct>({
 }: {
   categoryId: TProduct["categoryId"]
   currentPageHref: string
+  className?: string
   mode: StorefrontMode
   products: Array<TProduct>
   title?: string
@@ -782,7 +787,7 @@ function ProductSection<TProduct extends StorefrontProduct>({
   ) => void
 }) {
   return (
-    <section>
+    <section className={className}>
       {title && (
         <h2 className="mb-5 text-2xl font-black tracking-normal uppercase">
           {title}
@@ -913,13 +918,13 @@ function CategoryProductSections<
         <section key={category._id}>
           <div
             className={cn(
-              "group/section relative mb-5 flex min-w-0 items-center justify-end gap-4",
+              "group/section relative mb-5 flex min-w-0 items-center justify-start gap-4",
               isAdmin && "pr-10 sm:pr-48"
             )}
           >
             <Link
               to={categoryHref(category, mode)}
-              className="inline-flex max-w-full min-w-0 items-center gap-3 border-b-4 border-transparent pb-1 text-right transition outline-none hover:border-current focus-visible:border-current focus-visible:ring-2 focus-visible:ring-[#111]/30"
+              className="inline-flex max-w-full min-w-0 items-center gap-3 border-b-4 border-transparent pb-1 text-left transition outline-none hover:border-current focus-visible:border-current focus-visible:ring-2 focus-visible:ring-[#111]/30"
             >
               <h2 className="truncate font-oswald text-4xl leading-none font-black tracking-tight uppercase sm:text-5xl">
                 {category.name}

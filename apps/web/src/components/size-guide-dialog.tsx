@@ -156,7 +156,9 @@ export function SizeGuideDialog() {
   const [unitSystem, setUnitSystem] = useState<SizeGuideUnitSystem>("metric")
   const unitValue = useMemo(() => [unitSystem], [unitSystem])
   const triggerButton = useMemo(
-    () => <Button type="button" variant="link" size="sm" className="px-0" />,
+    () => (
+      <Button type="button" variant="link" size="sm" className="px-0 pl-0!" />
+    ),
     []
   )
   const handleUnitSystemChange = useCallback((value: Array<string>) => {

@@ -279,11 +279,11 @@ function AuthForm({
     <form onSubmit={onSubmit}>
       <DialogHeader>
         <DialogTitle>{authTitle(mode)}</DialogTitle>
-        <DialogDescription>
-          {mode === "reset-request"
-            ? "Enter your email to receive a reset link."
-            : "Save your cart and wishlist across devices."}
-        </DialogDescription>
+        {mode === "reset-request" ? (
+          <DialogDescription>
+            Enter your email to receive a reset link.
+          </DialogDescription>
+        ) : null}
       </DialogHeader>
 
       <div className="mt-5 grid gap-4">
@@ -311,6 +311,17 @@ function AuthForm({
               value={password}
               onChange={onPasswordChange}
             />
+            {mode === "sign-in" ? (
+              <Button
+                type="button"
+                variant="link"
+                disabled={isSubmitting}
+                className="h-auto justify-self-start rounded-none px-0 py-0 text-sm underline underline-offset-4"
+                onClick={onResetMode}
+              >
+                Reset password
+              </Button>
+            ) : null}
           </div>
         ) : null}
         {mode === "sign-up" ? (
@@ -350,19 +361,8 @@ function AuthForm({
           className="rounded-none"
           onClick={onToggleMode}
         >
-          {mode === "sign-in" ? "Create account" : "Sign in"}
+          {mode === "sign-in" ? "Sign up" : "Login"}
         </Button>
-        {mode === "sign-in" ? (
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isSubmitting}
-            className="rounded-none"
-            onClick={onResetMode}
-          >
-            Reset password
-          </Button>
-        ) : null}
         <Button
           type="submit"
           disabled={isSubmitting || passwordMismatch}
@@ -380,7 +380,7 @@ function authTitle(mode: AuthMode) {
     return "Reset password"
   }
 
-  return mode === "sign-in" ? "Sign in" : "Create account"
+  return mode === "sign-in" ? "Login" : "Sign up"
 }
 
 function submitLabel(mode: AuthMode, isSubmitting: boolean) {
@@ -392,5 +392,5 @@ function submitLabel(mode: AuthMode, isSubmitting: boolean) {
     return "Send link"
   }
 
-  return mode === "sign-in" ? "Sign in" : "Create account"
+  return mode === "sign-in" ? "Login" : "Sign up"
 }
