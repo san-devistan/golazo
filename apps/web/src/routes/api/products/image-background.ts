@@ -19,10 +19,6 @@ const PRODUCT_IMAGE_TYPES = new Set([
   "image/avif",
 ])
 const require = createRequire(import.meta.url)
-const BACKGROUND_REMOVAL_PUBLIC_PATH = pathToFileURL(
-  path.dirname(require.resolve("@imgly/background-removal-node")) + path.sep
-).href
-
 type BackgroundRemovalConfig = {
   model: "medium"
   output: {
@@ -75,27 +71,33 @@ export const Route = createFileRoute("/api/products/image-background")({
 })
 
 async function createForegroundCutout(image: Buffer, mimeType: string) {
-  const { removeBackground } = loadBackgroundRemoval()
+  const { removeBackground } = await loadBackgroundRemoval()
   const blob = await removeBackground(
     new Blob([Uint8Array.from(image)], { type: mimeType }),
     {
       model: "medium",
       output: { format: "image/png" },
-      publicPath: BACKGROUND_REMOVAL_PUBLIC_PATH,
+      publicPath: getBackgroundRemovalPublicPath(),
     }
   )
 
   return Buffer.from(await blob.arrayBuffer())
 }
 
-function loadBackgroundRemoval() {
-  const module = require("@imgly/background-removal-node")
+async function loadBackgroundRemoval() {
+  const module = await import("@imgly/background-removal-node")
 
   if (!isBackgroundRemovalNodeModule(module)) {
     throw new Error("Could not load the background removal tool.")
   }
 
   return module
+}
+
+function getBackgroundRemovalPublicPath() {
+  return pathToFileURL(
+    path.dirname(require.resolve("@imgly/background-removal-node")) + path.sep
+  ).href
 }
 
 function isBackgroundRemovalNodeModule(

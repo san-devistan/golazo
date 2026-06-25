@@ -4,8 +4,9 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["ADMIN_PASSWORD", "VITE_CONVEX_SITE_URL", "VITE_CONVEX_URL"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".output/**"]
+      "outputs": [".output/**", ".vercel/output/**"]
     },
     "lint": {
       "dependsOn": ["^lint"]
