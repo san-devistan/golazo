@@ -22,6 +22,7 @@
     "@workspace/ui": "workspace:*",
     "better-auth": "1.6.14",
     "convex": "^1.41.0",
+    "effect": "^3.21.4",
     "lucide-react": "^1.21.0",
     "nitro": "3.0.260603-beta",
     "react": "^19.2.7",

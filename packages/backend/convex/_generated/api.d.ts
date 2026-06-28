@@ -14,6 +14,7 @@ import type * as checkout from "../checkout.js";
 import type * as checkoutModel from "../checkoutModel.js";
 import type * as cloudinary from "../cloudinary.js";
 import type * as cloudinaryFolders from "../cloudinaryFolders.js";
+import type * as currency from "../currency.js";
 import type * as customer from "../customer.js";
 import type * as emailDelivery from "../emailDelivery.js";
 import type * as http from "../http.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   checkoutModel: typeof checkoutModel;
   cloudinary: typeof cloudinary;
   cloudinaryFolders: typeof cloudinaryFolders;
+  currency: typeof currency;
   customer: typeof customer;
   emailDelivery: typeof emailDelivery;
   http: typeof http;

@@ -111,6 +111,22 @@ export const productImageWriteValidator = v.object({
   sortOrder: v.number(),
 })
 
+export const productUpsertArgsValidator = {
+  productId: v.union(v.id("products"), v.null()),
+  categoryId: v.id("catalogCategories"),
+  name: v.string(),
+  description: v.string(),
+  basePriceCents: v.number(),
+  currency: v.string(),
+  status: productStatusValidator,
+  sku: v.union(v.string(), v.null()),
+  cloudinaryAssetFolder: v.union(v.string(), v.null()),
+  sortOrder: v.number(),
+  images: v.array(productImageWriteValidator),
+  options: v.array(productOptionWriteValidator),
+  metadata: v.array(productMetadataWriteValidator),
+}
+
 export const productOptionTemplateWriteValidator = v.object({
   templateId: v.union(v.id("productOptionTemplates"), v.null()),
   kind: productOptionTemplateKindValidator,

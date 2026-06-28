@@ -8,6 +8,7 @@ import {
   type LocalCustomerState,
   writeLocalState,
 } from "@/lib/customer-state-storage"
+import type { CurrencyCode } from "@/lib/money"
 import { api } from "@workspace/backend/api"
 import { useAction, useMutation, useQuery } from "convex/react"
 import type { GenericId } from "convex/values"
@@ -375,19 +376,22 @@ export function useCustomerState() {
     [isAuthenticated, removeServerCartItem]
   )
 
-  const startCheckout = useCallback(async () => {
-    if (!isAuthenticated) {
-      throw new Error("Sign in to checkout.")
-    }
+  const startCheckout = useCallback(
+    async (displayCurrency: CurrencyCode) => {
+      if (!isAuthenticated) {
+        throw new Error("Sign in to checkout.")
+      }
 
-    const cancelPath =
-      typeof window === "undefined"
-        ? "/"
-        : `${window.location.pathname}${window.location.search}`
-    const checkout = await createCartCheckout({ cancelPath })
+      const cancelPath =
+        typeof window === "undefined"
+          ? "/"
+          : `${window.location.pathname}${window.location.search}`
+      const checkout = await createCartCheckout({ cancelPath, displayCurrency })
 
-    window.location.assign(checkout.url)
-  }, [createCartCheckout, isAuthenticated])
+      window.location.assign(checkout.url)
+    },
+    [createCartCheckout, isAuthenticated]
+  )
 
   return {
     cartCount,

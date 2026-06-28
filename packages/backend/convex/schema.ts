@@ -163,6 +163,8 @@ export default defineSchema({
     stripeCustomerId: v.optional(v.string()),
     stripePaymentIntentId: v.optional(v.string()),
     stripePaymentStatus: v.optional(v.string()),
+    stripePresentmentAmountCents: v.optional(v.number()),
+    stripePresentmentCurrency: v.optional(v.string()),
     customerEmail: v.optional(v.union(v.string(), v.null())),
     customerPhone: v.optional(v.union(v.string(), v.null())),
     shippingName: v.optional(v.union(v.string(), v.null())),

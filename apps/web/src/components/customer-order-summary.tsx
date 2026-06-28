@@ -1,4 +1,4 @@
-import { useMoneyFormatter } from "@/lib/preferences"
+import { useExactMoneyFormatter, useMoneyFormatter } from "@/lib/preferences"
 import { Badge } from "@workspace/ui/components/badge"
 import { buttonVariants } from "@workspace/ui/lib/button-variants"
 import { cn } from "@workspace/ui/lib/utils"
@@ -59,6 +59,8 @@ export type CustomerOrderRecord = {
     trackingUrl?: string | null
     amountTotalCents: number
     currency: string
+    stripePresentmentAmountCents?: number
+    stripePresentmentCurrency?: string
     productCount: number
     failureReason?: string
     createdAt: number
@@ -91,7 +93,15 @@ export function CustomerOrderSummary({
   priority?: boolean
 }) {
   const formatPrice = useMoneyFormatter()
+  const formatExactPrice = useExactMoneyFormatter()
   const { order } = record
+  const orderTotal =
+    order.stripePresentmentAmountCents !== undefined
+      ? formatExactPrice(
+          order.stripePresentmentAmountCents,
+          order.stripePresentmentCurrency ?? order.currency
+        )
+      : formatPrice(order.amountTotalCents, order.currency)
   const commandId = order.commandId ?? shortId(order._id)
   const currentStatus = orderFlowStatus(order)
   const trackingLabel = order.trackingNumber
@@ -118,9 +128,7 @@ export function CustomerOrderSummary({
           </p>
         </div>
         <div className="shrink-0 sm:text-right">
-          <div className="font-oswald text-2xl font-medium">
-            {formatPrice(order.amountTotalCents, order.currency)}
-          </div>
+          <div className="font-oswald text-2xl font-medium">{orderTotal}</div>
           <div className="text-xs text-muted-foreground">
             {order.productCount} item{order.productCount === 1 ? "" : "s"}
           </div>

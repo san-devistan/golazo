@@ -49,6 +49,8 @@ export type AdminOrderRecord = {
     trackId?: string | null
     amountTotalCents: number
     currency: string
+    stripePresentmentAmountCents?: number
+    stripePresentmentCurrency?: string
     productCount: number
     failureReason?: string
     createdAt: number

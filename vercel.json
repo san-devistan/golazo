@@ -1,0 +1,3 @@
+{
+  "installCommand": "npm_config_onnxruntime_node_install_cuda=skip pnpm install"
+}

@@ -2,26 +2,16 @@ export const BASE_CURRENCY = "EUR"
 
 const DEFAULT_EUR_TO_USD_RATE = 1.1
 
-const configuredEurToUsdRate = Number.parseFloat(
-  import.meta.env.VITE_EUR_TO_USD_RATE ?? ""
-)
-const eurToUsdRate =
-  Number.isFinite(configuredEurToUsdRate) && configuredEurToUsdRate > 0
-    ? configuredEurToUsdRate
-    : DEFAULT_EUR_TO_USD_RATE
-
 export const CURRENCY_OPTIONS = [
   {
     code: "EUR",
     label: "Euro",
     symbol: "€",
-    rateFromEur: 1,
   },
   {
     code: "USD",
     label: "US dollar",
     symbol: "$",
-    rateFromEur: eurToUsdRate,
   },
 ] as const
 
@@ -33,6 +23,27 @@ const CURRENCY_CODES: ReadonlySet<string> = new Set(
 
 function isCurrencyCode(value: string): value is CurrencyCode {
   return CURRENCY_CODES.has(value)
+}
+
+function normalizedPositiveRate(value: number) {
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+function currencyFractionDigits(currency: string, locale: string) {
+  return (
+    new Intl.NumberFormat(locale, {
+      currency,
+      style: "currency",
+    }).resolvedOptions().maximumFractionDigits ?? 2
+  )
+}
+
+export function configuredEurToUsdRate() {
+  const configuredRate = Number.parseFloat(
+    import.meta.env.VITE_EUR_TO_USD_RATE ?? ""
+  )
+
+  return normalizedPositiveRate(configuredRate) ?? DEFAULT_EUR_TO_USD_RATE
 }
 
 export function normalizeCurrency(value: string) {
@@ -48,35 +59,47 @@ export function currencyOption(currency: CurrencyCode) {
   )
 }
 
-function convertMoneyCents({
+export function convertMoneyCents({
   amountCents,
+  eurToUsdRate,
   sourceCurrency,
   targetCurrency,
 }: {
   amountCents: number
+  eurToUsdRate: number
   sourceCurrency: string
   targetCurrency: CurrencyCode
 }) {
-  const sourceOption = currencyOption(normalizeCurrency(sourceCurrency))
-  const targetOption = currencyOption(targetCurrency)
-  const eurCents = amountCents / sourceOption.rateFromEur
+  const source = normalizeCurrency(sourceCurrency)
 
-  return Math.round(eurCents * targetOption.rateFromEur)
+  if (source === targetCurrency) {
+    return amountCents
+  }
+
+  const rate = normalizedPositiveRate(eurToUsdRate) ?? DEFAULT_EUR_TO_USD_RATE
+  const eurCents = source === BASE_CURRENCY ? amountCents : amountCents / rate
+
+  return Math.round(
+    targetCurrency === BASE_CURRENCY ? eurCents : eurCents * rate
+  )
 }
 
 export function formatMoney({
   amountCents,
   displayCurrency,
+  eurToUsdRate,
   locale,
   sourceCurrency = BASE_CURRENCY,
 }: {
   amountCents: number
   displayCurrency: CurrencyCode
+  eurToUsdRate: number
   locale: string
   sourceCurrency?: string
 }) {
   const convertedCents = convertMoneyCents({
     amountCents,
+    eurToUsdRate,
     sourceCurrency,
     targetCurrency: displayCurrency,
   })
@@ -85,4 +108,23 @@ export function formatMoney({
     currency: displayCurrency,
     style: "currency",
   }).format(convertedCents / 100)
+}
+
+export function formatExactMoney({
+  amountCents,
+  currency,
+  locale,
+}: {
+  amountCents: number
+  currency: string
+  locale: string
+}) {
+  const normalizedCurrency = currency.toUpperCase()
+
+  return new Intl.NumberFormat(locale, {
+    currency: normalizedCurrency,
+    style: "currency",
+  }).format(
+    amountCents / 10 ** currencyFractionDigits(normalizedCurrency, locale)
+  )
 }

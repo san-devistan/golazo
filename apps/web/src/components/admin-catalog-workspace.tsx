@@ -355,7 +355,7 @@ function productRecordToForm(record: AdminProductRecord): ProductFormState {
     currency: BASE_CURRENCY,
     status: productVisibilityStatus(record.product.status),
     sku: record.product.sku ?? "",
-    cloudinaryAssetFolder: record.product.cloudinaryAssetFolder ?? "",
+    cloudinaryAssetFolder: productRecordCloudinaryAssetFolder(record),
     images: productRecordImagesToForm(record),
     sortOrder: String(record.product.sortOrder ?? 0),
     optionTemplateIds: record.options.flatMap((option) =>
@@ -371,6 +371,15 @@ function productRecordToForm(record: AdminProductRecord): ProductFormState {
       showOnProductPage: item.showOnProductPage ?? true,
     })),
   }
+}
+
+function productRecordCloudinaryAssetFolder(record: AdminProductRecord) {
+  return (
+    sortBySortOrder(record.images).find((image) => image.cloudinaryAssetFolder)
+      ?.cloudinaryAssetFolder ??
+    record.product.cloudinaryAssetFolder ??
+    ""
+  )
 }
 
 function productRecordImagesToForm(
@@ -685,7 +694,7 @@ function useAdminCatalogWorkspaceElement({
 }) {
   const data = useQuery(api.shop.listAdmin)
   const upsertCategory = useMutation(api.shop.upsertCategory)
-  const upsertProduct = useMutation(api.shop.upsertProduct)
+  const upsertProduct = useAction(api.cloudinary.upsertProduct)
   const deleteCategory = useAction(api.cloudinary.deleteCategory)
   const deleteProduct = useAction(api.cloudinary.deleteProduct)
   const reorderCategories = useMutation(api.shop.reorderCategories)
@@ -877,7 +886,7 @@ function useAdminCatalogWorkspaceElement({
         currency: BASE_CURRENCY,
         status: productForm.status,
         sku: nullableText(productForm.sku),
-        cloudinaryAssetFolder: null,
+        cloudinaryAssetFolder: nullableText(productForm.cloudinaryAssetFolder),
         sortOrder: parseSortOrder(productForm.sortOrder, productSortFallback),
         images: productForm.images.map((image, index) => ({
           imageId: image.imageId,
@@ -1135,7 +1144,7 @@ export function AdminProductEditorDialog({
   onSaved?: (nextSlug: string) => void
 }) {
   const data = useQuery(api.shop.listAdmin)
-  const upsertProduct = useMutation(api.shop.upsertProduct)
+  const upsertProduct = useAction(api.cloudinary.upsertProduct)
   const createCloudinaryUploadSignature = useAction(
     api.cloudinary.createUploadSignature
   )
@@ -1219,7 +1228,7 @@ export function AdminProductEditorDialog({
         currency: BASE_CURRENCY,
         status: productForm.status,
         sku: nullableText(productForm.sku),
-        cloudinaryAssetFolder: null,
+        cloudinaryAssetFolder: nullableText(productForm.cloudinaryAssetFolder),
         sortOrder: parseSortOrder(productForm.sortOrder, productSortFallback),
         images: productForm.images.map((image, index) => ({
           imageId: image.imageId,
@@ -1643,8 +1652,8 @@ function ProductBasicsForm({
           }
         />
         <p className="text-xs text-muted-foreground">
-          Product prices are entered in EUR. Customer currency conversion
-          happens on the storefront.
+          Product prices are entered in EUR. Checkout uses the selected customer
+          currency.
         </p>
       </div>
     </section>

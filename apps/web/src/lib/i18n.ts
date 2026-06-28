@@ -67,6 +67,7 @@ const LOCALE_CODES: ReadonlySet<string> = new Set(
 
 const EN_MESSAGES = {
   account: "Account",
+  addToCart: "Add to cart",
   cart: "Cart",
   cartEmpty: "Your cart is empty.",
   cartTitle: "Cart",
@@ -101,6 +102,7 @@ const TRANSLATIONS = {
   en: EN_MESSAGES,
   fr: {
     account: "Compte",
+    addToCart: "Ajouter au panier",
     cart: "Panier",
     cartEmpty: "Votre panier est vide.",
     cartTitle: "Panier",
@@ -129,6 +131,7 @@ const TRANSLATIONS = {
   },
   es: {
     account: "Cuenta",
+    addToCart: "Añadir al carrito",
     cart: "Carrito",
     cartEmpty: "Tu carrito está vacío.",
     cartTitle: "Carrito",
@@ -157,6 +160,7 @@ const TRANSLATIONS = {
   },
   de: {
     account: "Konto",
+    addToCart: "In den Warenkorb",
     cart: "Warenkorb",
     cartEmpty: "Dein Warenkorb ist leer.",
     cartTitle: "Warenkorb",
@@ -185,6 +189,7 @@ const TRANSLATIONS = {
   },
   it: {
     account: "Account",
+    addToCart: "Aggiungi al carrello",
     cart: "Carrello",
     cartEmpty: "Il carrello è vuoto.",
     cartTitle: "Carrello",
@@ -213,6 +218,7 @@ const TRANSLATIONS = {
   },
   pt: {
     account: "Conta",
+    addToCart: "Adicionar ao carrinho",
     cart: "Carrinho",
     cartEmpty: "O carrinho está vazio.",
     cartTitle: "Carrinho",
@@ -241,6 +247,7 @@ const TRANSLATIONS = {
   },
   nl: {
     account: "Account",
+    addToCart: "In winkelwagen",
     cart: "Winkelwagen",
     cartEmpty: "Je winkelwagen is leeg.",
     cartTitle: "Winkelwagen",
@@ -269,6 +276,7 @@ const TRANSLATIONS = {
   },
   pl: {
     account: "Konto",
+    addToCart: "Dodaj do koszyka",
     cart: "Koszyk",
     cartEmpty: "Koszyk jest pusty.",
     cartTitle: "Koszyk",

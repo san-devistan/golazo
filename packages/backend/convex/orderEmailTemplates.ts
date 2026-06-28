@@ -15,6 +15,8 @@ export type OrderEmailOrder = {
   commandId?: string
   currency: string
   dropId?: string | null
+  stripePresentmentAmountCents?: number
+  stripePresentmentCurrency?: string
   stripeCheckoutSessionId?: string
   trackId?: string | null
 }
@@ -44,10 +46,31 @@ function orderReference(order: OrderEmailOrder) {
 }
 
 function formatMoney(cents: number, currency: string) {
+  const normalizedCurrency = currency.toUpperCase()
+  const fractionDigits =
+    new Intl.NumberFormat("en", {
+      currency: normalizedCurrency,
+      style: "currency",
+    }).resolvedOptions().maximumFractionDigits ?? 2
+
   return new Intl.NumberFormat("en", {
-    currency: currency.toUpperCase(),
+    currency: normalizedCurrency,
     style: "currency",
-  }).format(cents / 100)
+  }).format(cents / 10 ** fractionDigits)
+}
+
+function orderTotal(order: OrderEmailOrder) {
+  if (
+    order.stripePresentmentAmountCents !== undefined &&
+    order.stripePresentmentCurrency
+  ) {
+    return formatMoney(
+      order.stripePresentmentAmountCents,
+      order.stripePresentmentCurrency
+    )
+  }
+
+  return formatMoney(order.amountTotalCents, order.currency)
 }
 
 function fulfillmentStatusLabel(status: CheckoutFulfillmentStatus) {
@@ -210,7 +233,7 @@ export function buildOrderConfirmationEmail({
 }: OrderEmailPreviewRecord) {
   const reference = orderReference(order)
   const note = deliveryNote(customerEmail)
-  const total = formatMoney(order.amountTotalCents, order.currency)
+  const total = orderTotal(order)
   const url = orderUrl(order)
   const subject = `Your Golazo order ${reference} is confirmed`
   const text = `Thanks for your order.

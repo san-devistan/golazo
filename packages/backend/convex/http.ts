@@ -38,6 +38,10 @@ function checkoutShippingDetails(session: Stripe.Checkout.Session) {
   return session.collected_information?.shipping_details ?? null
 }
 
+function checkoutPresentmentCurrency(session: Stripe.Checkout.Session) {
+  return session.presentment_details?.presentment_currency.toUpperCase()
+}
+
 async function markOrderForCheckoutSession(
   ctx: Parameters<
     NonNullable<StripeEventHandlers["checkout.session.completed"]>
@@ -57,6 +61,9 @@ async function markOrderForCheckoutSession(
       stripeCustomerId: stripeObjectId(session.customer),
       stripePaymentIntentId: stripeObjectId(session.payment_intent),
       stripePaymentStatus: session.payment_status,
+      stripePresentmentAmountCents:
+        session.presentment_details?.presentment_amount,
+      stripePresentmentCurrency: checkoutPresentmentCurrency(session),
       customerEmail: session.customer_details?.email ?? null,
       customerPhone: session.customer_details?.phone ?? null,
       shippingName: shippingDetails?.name ?? null,

@@ -1,7 +1,11 @@
 import { ProductThumb } from "@/components/customer/product-thumb"
 import { displayCartConfigurationValue } from "@/components/customer/utils"
 import type { CustomerCartItem } from "@/lib/customer-state"
-import { useMoneyFormatter, useTranslation } from "@/lib/preferences"
+import {
+  useAppPreferences,
+  useMoneyFormatter,
+  useTranslation,
+} from "@/lib/preferences"
 import { getErrorMessage } from "@/lib/shop"
 import { Link } from "@tanstack/react-router"
 import { Button } from "@workspace/ui/components/button"
@@ -38,17 +42,17 @@ export function CartSheet({
   onRemoveItem: (configurationKey: string) => Promise<void>
   onSetQuantity: (configurationKey: string, quantity: number) => Promise<void>
 }) {
-  const formatPrice = useMoneyFormatter()
-  const t = useTranslation()
+  const { convertPriceCents, currency, formatPrice, t } = useAppPreferences()
   const totalCents = items.reduce(
-    (total, item) => total + item.unitPriceCents * item.quantity,
+    (total, item) =>
+      total +
+      convertPriceCents(item.unitPriceCents, item.currency) * item.quantity,
     0
   )
   const productCount = items.reduce((total, item) => total + item.quantity, 0)
   const productCountLabel = `${productCount} ${t(
     productCount === 1 ? "productSingular" : "productPlural"
   )}`
-  const currency = items[0]?.currency ?? "EUR"
   const checkoutLabel = isAuthenticated ? t("checkout") : t("signInToCheckout")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 

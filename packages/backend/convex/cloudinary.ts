@@ -6,12 +6,14 @@ import { v } from "convex/values"
 import { createHash, randomUUID } from "node:crypto"
 
 import { internal } from "./_generated/api"
+import type { Id } from "./_generated/dataModel.d.ts"
 import { action } from "./_generated/server"
 import {
   cloudinaryFolderForProductId,
   cloudinaryFolderForProductUploadKey,
   isManagedProductCloudinaryFolder,
 } from "./cloudinaryFolders"
+import { productUpsertArgsValidator } from "./shopValidators"
 
 const IMAGE_UPLOAD_ALLOWED_FORMATS = "jpg,jpeg,png,webp,avif"
 const CLOUDINARY_SEARCH_PAGE_SIZE = 500
@@ -25,6 +27,23 @@ type CloudinaryCredentials = {
 type CloudinaryDeletionPlan = {
   cloudinaryPublicIds: Array<string>
   cloudinaryAssetFolders: Array<string>
+}
+type ProductUpsertCloudinaryCleanupResult = {
+  productId: Id<"products">
+  removedCloudinaryAssets: CloudinaryDeletionPlan
+}
+type CloudinaryUploadSignature = {
+  cloudName: string
+  apiKey: string
+  allowedFormats: string
+  timestamp: number
+  signature: string
+  assetFolder: string
+}
+type CloudinaryImageResource = {
+  publicId: string
+  assetFolder: string | null
+  folder: string | null
 }
 
 function requiredEnv(name: string) {
@@ -90,6 +109,42 @@ function stringField(value: Record<string, unknown>, field: string) {
   return typeof fieldValue === "string" ? fieldValue : null
 }
 
+function cloudinaryImageResource(
+  value: unknown
+): CloudinaryImageResource | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const publicId = stringField(value, "public_id")
+  if (!publicId) {
+    return null
+  }
+
+  return {
+    publicId,
+    assetFolder: stringField(value, "asset_folder"),
+    folder: stringField(value, "folder"),
+  }
+}
+
+function resourceFolder({
+  assetFolder,
+  folder,
+}: Pick<CloudinaryImageResource, "assetFolder" | "folder">) {
+  return assetFolder ?? folder
+}
+
+function publicIdFolder(publicId: string) {
+  const folder = publicId.split("/").slice(0, -1).join("/")
+
+  return folder && isDeletableFolder(folder) ? folder : null
+}
+
+function exactSearchExpression(field: string, value: string) {
+  return `${field}="${escapeSearchValue(value)}"`
+}
+
 function isDeletableFolder(folder: string) {
   return folder !== "golazo" && folder !== "golazo/products"
 }
@@ -108,11 +163,11 @@ async function throwCloudinaryError(response: Response, fallback: string) {
   throw new Error(message ?? fallback)
 }
 
-async function searchAssetFolderImagePublicIds(
+async function searchCloudinaryImageResources(
   credentials: CloudinaryCredentials,
-  folder: string
+  expression: string
 ) {
-  const publicIds: Array<string> = []
+  const resources: Array<CloudinaryImageResource> = []
   let nextCursor: string | null = null
 
   do {
@@ -125,7 +180,7 @@ async function searchAssetFolderImagePublicIds(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          expression: `resource_type:image AND asset_folder="${escapeSearchValue(folder)}"`,
+          expression,
           max_results: CLOUDINARY_SEARCH_PAGE_SIZE,
           ...(nextCursor ? { next_cursor: nextCursor } : {}),
         }),
@@ -135,21 +190,17 @@ async function searchAssetFolderImagePublicIds(
     if (!response.ok) {
       await throwCloudinaryError(
         response,
-        `Cloudinary search failed for folder "${folder}".`
+        `Cloudinary search failed for expression "${expression}".`
       )
     }
 
     const payload: unknown = await response.json()
-    const resources = isRecord(payload) ? payload.resources : null
-    if (Array.isArray(resources)) {
-      for (const resource of resources) {
-        if (!isRecord(resource)) {
-          continue
-        }
-
-        const publicId = stringField(resource, "public_id")
-        if (publicId) {
-          publicIds.push(publicId)
+    const payloadResources = isRecord(payload) ? payload.resources : null
+    if (Array.isArray(payloadResources)) {
+      for (const resource of payloadResources) {
+        const imageResource = cloudinaryImageResource(resource)
+        if (imageResource) {
+          resources.push(imageResource)
         }
       }
     }
@@ -157,7 +208,38 @@ async function searchAssetFolderImagePublicIds(
     nextCursor = isRecord(payload) ? stringField(payload, "next_cursor") : null
   } while (nextCursor)
 
-  return publicIds
+  return resources
+}
+
+async function searchAssetFolderImageResources(
+  credentials: CloudinaryCredentials,
+  folder: string
+) {
+  const folderExpression = exactSearchExpression("asset_folder", folder)
+  const legacyFolderExpression = exactSearchExpression("folder", folder)
+
+  return await searchCloudinaryImageResources(
+    credentials,
+    `resource_type:image AND (${folderExpression} OR ${legacyFolderExpression})`
+  )
+}
+
+async function searchPublicIdImageResources(
+  credentials: CloudinaryCredentials,
+  publicIds: Array<string>
+) {
+  const publicIdExpressions = publicIds.map((publicId) =>
+    exactSearchExpression("public_id", publicId)
+  )
+
+  if (publicIdExpressions.length === 0) {
+    return []
+  }
+
+  return await searchCloudinaryImageResources(
+    credentials,
+    `resource_type:image AND (${publicIdExpressions.join(" OR ")})`
+  )
 }
 
 async function destroyCloudinaryImage(
@@ -228,8 +310,30 @@ async function deleteCloudinaryFolder(
 }
 
 async function deleteCloudinaryPlan(plan: CloudinaryDeletionPlan) {
+  const directPublicIds = uniqueNonEmptyValues(plan.cloudinaryPublicIds)
+  const directPublicIdFolders = directPublicIds.map(publicIdFolder)
+  const foldersFromPlan = uniqueNonEmptyValues([
+    ...plan.cloudinaryAssetFolders,
+    ...directPublicIdFolders,
+  ])
+
+  if (foldersFromPlan.length === 0 && directPublicIds.length === 0) {
+    return {
+      deletedAssetCount: 0,
+      deletedFolderCount: 0,
+    }
+  }
+
   const credentials = cloudinaryCredentials()
-  const folders = uniqueNonEmptyValues(plan.cloudinaryAssetFolders)
+  const directResources = await searchPublicIdImageResources(
+    credentials,
+    directPublicIds
+  )
+  const folders = uniqueNonEmptyValues([
+    ...foldersFromPlan,
+    ...directResources.map(resourceFolder),
+  ])
+
   folders.sort(
     (first: string, second: string) =>
       second.split("/").length - first.split("/").length
@@ -238,12 +342,14 @@ async function deleteCloudinaryPlan(plan: CloudinaryDeletionPlan) {
 
   for (const folder of folders) {
     folderPublicIds.push(
-      ...(await searchAssetFolderImagePublicIds(credentials, folder))
+      ...(await searchAssetFolderImageResources(credentials, folder)).map(
+        (resource) => resource.publicId
+      )
     )
   }
 
   const publicIds = uniqueNonEmptyValues([
-    ...plan.cloudinaryPublicIds,
+    ...directPublicIds,
     ...folderPublicIds,
   ])
 
@@ -269,15 +375,21 @@ export const createUploadSignature = action({
     productId: v.union(v.id("products"), v.null()),
     productAssetFolder: v.union(v.string(), v.null()),
   },
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args): Promise<CloudinaryUploadSignature> => {
     const { cloudName, apiKey, apiSecret } = cloudinaryCredentials()
     const existingFolder = args.productAssetFolder?.trim() ?? ""
-    const assetFolder =
-      existingFolder && isManagedProductCloudinaryFolder(existingFolder)
+    const productFolder: string | null = args.productId
+      ? await ctx.runQuery(internal.shop.getProductCloudinaryUploadFolder, {
+          productId: args.productId,
+        })
+      : null
+    const assetFolder: string =
+      productFolder ??
+      (existingFolder && isManagedProductCloudinaryFolder(existingFolder)
         ? existingFolder
         : args.productId
           ? cloudinaryFolderForProductId(args.productId)
-          : cloudinaryFolderForProductUploadKey(randomUUID())
+          : cloudinaryFolderForProductUploadKey(randomUUID()))
     const timestamp = Math.floor(Date.now() / 1000)
     const params: Record<string, number | string> = {
       allowed_formats: IMAGE_UPLOAD_ALLOWED_FORMATS,
@@ -293,6 +405,20 @@ export const createUploadSignature = action({
       signature: signUploadParams(params, apiSecret),
       assetFolder,
     }
+  },
+})
+
+export const upsertProduct = action({
+  args: productUpsertArgsValidator,
+  handler: async (ctx, args) => {
+    const result: ProductUpsertCloudinaryCleanupResult = await ctx.runMutation(
+      internal.shop.upsertProductRecordForCloudinaryCleanup,
+      args
+    )
+
+    await deleteCloudinaryPlan(result.removedCloudinaryAssets)
+
+    return result.productId
   },
 })
 

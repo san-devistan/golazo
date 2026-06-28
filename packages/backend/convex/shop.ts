@@ -2,7 +2,7 @@
 
 import { v, type Infer } from "convex/values"
 
-import type { Id } from "./_generated/dataModel.d.ts"
+import type { Doc, Id } from "./_generated/dataModel.d.ts"
 import {
   internalMutation,
   internalQuery,
@@ -16,11 +16,12 @@ import {
   cloudinaryFolderForProductId,
 } from "./cloudinaryFolders"
 import {
-  productImageWriteValidator,
-  productMetadataWriteValidator,
-  productOptionWriteValidator,
   productOptionTemplateWriteValidator,
-  productStatusValidator,
+  productUpsertArgsValidator,
+  type productImageWriteValidator,
+  type productMetadataWriteValidator,
+  type productOptionWriteValidator,
+  type productStatusValidator,
 } from "./shopValidators"
 
 const DELETE_BATCH_SIZE = 200
@@ -40,9 +41,28 @@ type ProductStatus = Infer<typeof productStatusValidator>
 type CategoryId = Id<"catalogCategories">
 type ProductId = Id<"products">
 type ProductOptionTemplateId = Id<"productOptionTemplates">
+type ProductUpsertArgs = {
+  productId: ProductId | null
+  categoryId: CategoryId
+  name: string
+  description: string
+  basePriceCents: number
+  currency: string
+  status: ProductStatus
+  sku: string | null
+  cloudinaryAssetFolder: string | null
+  sortOrder: number
+  images: Array<ProductImageWrite>
+  options: Array<ProductOptionWrite>
+  metadata: Array<ProductMetadataWrite>
+}
 type ProductDeletionPlan = {
   cloudinaryPublicIds: Array<string>
   cloudinaryAssetFolders: Array<string>
+}
+type ProductUpsertResult = {
+  productId: ProductId
+  removedCloudinaryAssets: ProductDeletionPlan
 }
 
 type CategoryDoc = {
@@ -573,15 +593,42 @@ function savedProductAssetFolder({
   )
 }
 
+function removedProductImageCloudinaryPlan({
+  existingProduct,
+  existingImages,
+  normalizedImages,
+}: {
+  existingProduct: Doc<"products"> | null
+  existingImages: Array<Doc<"productImages">>
+  normalizedImages: Array<NormalizedProductImage>
+}): ProductDeletionPlan {
+  const retainedPublicIds = new Set(
+    uniqueNonNullValues(
+      normalizedImages.map((image) => image.cloudinaryPublicId)
+    )
+  )
+  const removedPublicIds = uniqueNonNullValues([
+    existingProduct?.cloudinaryPublicId,
+    ...existingImages.map((image) => image.cloudinaryPublicId),
+  ]).filter((publicId) => !retainedPublicIds.has(publicId))
+
+  return {
+    cloudinaryPublicIds: removedPublicIds,
+    cloudinaryAssetFolders: [],
+  }
+}
+
 async function saveProductDocument(
   ctx: MutationCtx,
   {
     productId,
     fields,
+    existingProduct,
     now,
   }: {
     productId: ProductId | null
     fields: ProductFields
+    existingProduct: Doc<"products"> | null
     now: number
   }
 ) {
@@ -592,7 +639,6 @@ async function saveProductDocument(
     })
   }
 
-  const existingProduct = await ctx.db.get(productId)
   if (!existingProduct) {
     throw new Error("Product not found.")
   }
@@ -609,6 +655,32 @@ async function listImagesForProduct(ctx: QueryCtx, productId: ProductId) {
       q.eq("productId", productId)
     )
     .take(PRODUCT_IMAGE_LIMIT)
+}
+
+async function productCloudinaryUploadFolder(
+  ctx: QueryCtx,
+  productId: ProductId
+) {
+  const product = await ctx.db.get(productId)
+  if (!product) {
+    throw new Error("Product not found.")
+  }
+
+  const images = await listImagesForProduct(ctx, productId)
+  const imageFolder =
+    images.find((image) => normalizeNullableText(image.cloudinaryAssetFolder))
+      ?.cloudinaryAssetFolder ?? null
+
+  if (imageFolder) {
+    return imageFolder
+  }
+
+  const productFolder = normalizeNullableText(product.cloudinaryAssetFolder)
+  if (productFolder) {
+    return productFolder
+  }
+
+  return null
 }
 
 async function listOptionsForProduct(ctx: QueryCtx, productId: ProductId) {
@@ -783,12 +855,14 @@ async function syncProductMetadata(
 async function syncProductImages({
   ctx,
   productId,
+  existingProduct,
   images,
   normalizedImages,
   now,
 }: {
   ctx: MutationCtx
   productId: ProductId
+  existingProduct: Doc<"products"> | null
   images: Array<ProductImageWrite>
   normalizedImages: Array<NormalizedProductImage>
   now: number
@@ -802,6 +876,11 @@ async function syncProductImages({
   const retainedImageIds = new Set(
     images.flatMap((image) => (image.imageId === null ? [] : [image.imageId]))
   )
+  const removedCloudinaryAssets = removedProductImageCloudinaryPlan({
+    existingProduct,
+    existingImages,
+    normalizedImages,
+  })
 
   for (const existingImage of existingImages) {
     if (!retainedImageIds.has(existingImage._id)) {
@@ -835,6 +914,8 @@ async function syncProductImages({
       updatedAt: now,
     })
   }
+
+  return removedCloudinaryAssets
 }
 
 async function getProductDeletionPlan(
@@ -863,6 +944,7 @@ async function getProductDeletionPlan(
       ...images.map((image) => image.cloudinaryPublicId),
     ]),
     cloudinaryAssetFolders: uniqueNonNullValues([
+      cloudinaryFolderForProductId(productId),
       product.cloudinaryAssetFolder,
       ...images.map((image) => image.cloudinaryAssetFolder),
     ]),
@@ -1393,87 +1475,139 @@ export const setCategoryVisibility = mutation({
   },
 })
 
-export const upsertProduct = mutation({
-  args: {
-    productId: v.union(v.id("products"), v.null()),
-    categoryId: v.id("catalogCategories"),
-    name: v.string(),
-    description: v.string(),
-    basePriceCents: v.number(),
-    currency: v.string(),
-    status: productStatusValidator,
-    sku: v.union(v.string(), v.null()),
-    cloudinaryAssetFolder: v.union(v.string(), v.null()),
-    sortOrder: v.number(),
-    images: v.array(productImageWriteValidator),
-    options: v.array(productOptionWriteValidator),
-    metadata: v.array(productMetadataWriteValidator),
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now()
-    await getCategoryOrThrow(ctx, args.categoryId)
-    const name = normalizeRequiredText("Product name", args.name)
-    const slug = slugify(name)
-    const duplicateProduct = await ctx.db
-      .query("products")
-      .withIndex("by_slug", (q) => q.eq("slug", slug))
-      .unique()
+async function getExistingProductForWrite(
+  ctx: MutationCtx,
+  productId: ProductId | null
+) {
+  if (productId === null) {
+    return null
+  }
 
-    if (duplicateProduct && duplicateProduct._id !== args.productId) {
-      throw new Error("A product with this name already exists.")
-    }
+  const existingProduct = await ctx.db.get(productId)
+  if (!existingProduct) {
+    throw new Error("Product not found.")
+  }
 
-    const productAssetFolder = productAssetFolderForWrite({
-      productId: args.productId,
-      cloudinaryAssetFolder: args.cloudinaryAssetFolder,
-    })
-    const productImages = normalizeProductImages(
-      args.images,
-      productAssetFolder
-    )
-    const primaryImage = productImages[0] ?? null
-    const productFields = {
-      categoryId: args.categoryId,
-      name,
-      slug,
-      description: args.description.trim(),
-      basePriceCents: normalizePriceCents("Base price", args.basePriceCents),
-      currency: normalizeCurrency(args.currency),
-      status: args.status,
-      sku: normalizeNullableText(args.sku),
-      imageUrl: primaryImage?.imageUrl ?? null,
-      cloudinaryPublicId: primaryImage?.cloudinaryPublicId ?? null,
-      cloudinaryAssetFolder:
-        productAssetFolder ?? primaryImage?.cloudinaryAssetFolder ?? null,
-      sortOrder: normalizeSortOrder(args.sortOrder),
-      updatedAt: now,
-    }
+  return existingProduct
+}
 
-    const productId = await saveProductDocument(ctx, {
-      productId: args.productId,
-      fields: productFields,
-      now,
-    })
-    await ctx.db.patch(productId, {
-      cloudinaryAssetFolder: savedProductAssetFolder({
-        productId,
-        productAssetFolder,
-        primaryImage,
-      }),
-      updatedAt: now,
-    })
+async function assertUniqueProductSlug(
+  ctx: MutationCtx,
+  {
+    productId,
+    slug,
+  }: {
+    productId: ProductId | null
+    slug: string
+  }
+) {
+  const duplicateProduct = await ctx.db
+    .query("products")
+    .withIndex("by_slug", (q) => q.eq("slug", slug))
+    .unique()
 
-    await syncProductImages({
-      ctx,
+  if (duplicateProduct && duplicateProduct._id !== productId) {
+    throw new Error("A product with this name already exists.")
+  }
+}
+
+function productFieldsForWrite({
+  args,
+  name,
+  now,
+  primaryImage,
+  productAssetFolder,
+  slug,
+}: {
+  args: ProductUpsertArgs
+  name: string
+  now: number
+  primaryImage: NormalizedProductImage | null
+  productAssetFolder: string | null
+  slug: string
+}): ProductFields {
+  return {
+    categoryId: args.categoryId,
+    name,
+    slug,
+    description: args.description.trim(),
+    basePriceCents: normalizePriceCents("Base price", args.basePriceCents),
+    currency: normalizeCurrency(args.currency),
+    status: args.status,
+    sku: normalizeNullableText(args.sku),
+    imageUrl: primaryImage?.imageUrl ?? null,
+    cloudinaryPublicId: primaryImage?.cloudinaryPublicId ?? null,
+    cloudinaryAssetFolder:
+      productAssetFolder ?? primaryImage?.cloudinaryAssetFolder ?? null,
+    sortOrder: normalizeSortOrder(args.sortOrder),
+    updatedAt: now,
+  }
+}
+
+async function upsertProductRecord(
+  ctx: MutationCtx,
+  args: ProductUpsertArgs
+): Promise<ProductUpsertResult> {
+  const now = Date.now()
+  await getCategoryOrThrow(ctx, args.categoryId)
+  const existingProduct = await getExistingProductForWrite(ctx, args.productId)
+  const name = normalizeRequiredText("Product name", args.name)
+  const slug = slugify(name)
+  await assertUniqueProductSlug(ctx, { productId: args.productId, slug })
+
+  const productAssetFolder = productAssetFolderForWrite({
+    productId: args.productId,
+    cloudinaryAssetFolder: args.cloudinaryAssetFolder,
+  })
+  const productImages = normalizeProductImages(args.images, productAssetFolder)
+  const primaryImage = productImages[0] ?? null
+  const productFields = productFieldsForWrite({
+    args,
+    name,
+    now,
+    primaryImage,
+    productAssetFolder,
+    slug,
+  })
+
+  const productId = await saveProductDocument(ctx, {
+    productId: args.productId,
+    fields: productFields,
+    existingProduct,
+    now,
+  })
+  await ctx.db.patch(productId, {
+    cloudinaryAssetFolder: savedProductAssetFolder({
       productId,
-      images: args.images,
-      normalizedImages: productImages,
-      now,
-    })
-    await syncProductOptions(ctx, productId, args.options, now)
-    await syncProductMetadata(ctx, productId, args.metadata, now)
+      productAssetFolder,
+      primaryImage,
+    }),
+    updatedAt: now,
+  })
 
-    return productId
+  const removedCloudinaryAssets = await syncProductImages({
+    ctx,
+    productId,
+    existingProduct,
+    images: args.images,
+    normalizedImages: productImages,
+    now,
+  })
+  await syncProductOptions(ctx, productId, args.options, now)
+  await syncProductMetadata(ctx, productId, args.metadata, now)
+
+  return {
+    productId,
+    removedCloudinaryAssets,
+  }
+}
+
+export const upsertProduct = mutation({
+  args: productUpsertArgsValidator,
+  handler: async (ctx, args) => {
+    const result = await upsertProductRecord(ctx, args)
+
+    return result.productId
   },
 })
 
@@ -1579,6 +1713,22 @@ export const getCategoryCloudinaryDeletionPlan = internalQuery({
   },
   handler: async (ctx, args) => {
     return await getCategoryDeletionPlan(ctx, args.categoryId)
+  },
+})
+
+export const getProductCloudinaryUploadFolder = internalQuery({
+  args: {
+    productId: v.id("products"),
+  },
+  handler: async (ctx, args) => {
+    return await productCloudinaryUploadFolder(ctx, args.productId)
+  },
+})
+
+export const upsertProductRecordForCloudinaryCleanup = internalMutation({
+  args: productUpsertArgsValidator,
+  handler: async (ctx, args) => {
+    return await upsertProductRecord(ctx, args)
   },
 })
 

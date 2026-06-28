@@ -8,6 +8,13 @@ import { components, internal } from "./_generated/api"
 import type { Id } from "./_generated/dataModel.d.ts"
 import { action } from "./_generated/server"
 import {
+  BASE_CURRENCY,
+  checkoutCurrencyValidator,
+  normalizeCheckoutCurrency,
+  resolveEurToUsdRate,
+  type CheckoutCurrency,
+} from "./currency"
+import {
   DEFAULT_SHIPPING_ALLOWED_COUNTRIES,
   isShippingAllowedCountry,
 } from "./stripeAllowedCountries"
@@ -21,7 +28,7 @@ type CheckoutActionLineItem = {
   productName: string
   imageUrl: string | null
   unitPriceCents: number
-  currency: string
+  currency: CheckoutCurrency
   quantity: number
   configurationSummary: Array<{ label: string; value: string }>
 }
@@ -35,6 +42,11 @@ type PendingCheckoutOrder = {
 type CreateCartCheckoutResult = {
   sessionId: string
   url: string
+}
+
+type CurrencyRatesResult = {
+  baseCurrency: typeof BASE_CURRENCY
+  eurToUsdRate: number
 }
 
 function requireStripeSecretKey() {
@@ -119,9 +131,22 @@ function checkoutMetadata({
   }
 }
 
+export const getCurrencyRates = action({
+  args: {},
+  returns: v.object({
+    baseCurrency: v.literal(BASE_CURRENCY),
+    eurToUsdRate: v.number(),
+  }),
+  handler: async (): Promise<CurrencyRatesResult> => ({
+    baseCurrency: BASE_CURRENCY,
+    eurToUsdRate: await resolveEurToUsdRate(),
+  }),
+})
+
 export const createCartCheckout = action({
   args: {
     cancelPath: v.optional(v.string()),
+    displayCurrency: v.optional(checkoutCurrencyValidator),
   },
   returns: v.object({
     sessionId: v.string(),
@@ -135,9 +160,12 @@ export const createCartCheckout = action({
     }
 
     const userTokenIdentifier = identity.tokenIdentifier
+    const displayCurrency = normalizeCheckoutCurrency(args.displayCurrency)
+    const eurToUsdRate =
+      displayCurrency === BASE_CURRENCY ? 1 : await resolveEurToUsdRate()
     const order: PendingCheckoutOrder = await ctx.runMutation(
       internal.checkoutModel.createPendingOrderFromCart,
-      { userTokenIdentifier }
+      { displayCurrency, eurToUsdRate, userTokenIdentifier }
     )
 
     try {

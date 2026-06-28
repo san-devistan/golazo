@@ -1,4 +1,6 @@
+import type { Config as BackgroundRemovalConfig } from "@imgly/background-removal-node"
 import { createFileRoute } from "@tanstack/react-router"
+import { Data, Effect } from "effect"
 import { Buffer } from "node:buffer"
 import { createRequire } from "node:module"
 import path from "node:path"
@@ -18,14 +20,7 @@ const PRODUCT_IMAGE_TYPES = new Set([
   "image/webp",
   "image/avif",
 ])
-const require = createRequire(import.meta.url)
-type BackgroundRemovalConfig = {
-  model: "medium"
-  output: {
-    format: "image/png"
-  }
-  publicPath: string
-}
+const nodeRequire = createRequire(import.meta.url)
 
 type BackgroundRemovalNodeModule = {
   removeBackground: (
@@ -34,90 +29,215 @@ type BackgroundRemovalNodeModule = {
   ) => Promise<Blob>
 }
 
+type ProductImageError = ProductImageProcessingError | ProductImageRequestError
+
+class ProductImageRequestError extends Data.TaggedError(
+  "ProductImageRequestError"
+)<{
+  readonly cause?: unknown
+  readonly message: string
+}> {
+  readonly status = 400
+}
+
+class ProductImageProcessingError extends Data.TaggedError(
+  "ProductImageProcessingError"
+)<{
+  readonly cause?: unknown
+  readonly message: string
+}> {
+  readonly status = 500
+}
+
 export const Route = createFileRoute("/api/products/image-background")({
   server: {
     handlers: {
-      POST: async ({ request }) => {
-        try {
-          const formData = await request.formData()
-          const file = formData.get("file")
-
-          if (!isUploadFile(file)) {
-            return errorJson("Upload one product image.", 400)
-          }
-
-          assertProductImageFile(file)
-
-          const source = Buffer.from(await file.arrayBuffer())
-          const cutout = await createForegroundCutout(source, file.type)
-          const flattened = await sharp(cutout)
-            .flatten({ background: PRODUCT_IMAGE_BACKGROUND })
-            .webp({ lossless: true })
-            .toBuffer()
-
-          return new Response(Uint8Array.from(flattened), {
-            headers: {
-              "cache-control": "no-store",
-              "content-length": String(flattened.byteLength),
-              "content-type": PRODUCT_IMAGE_OUTPUT_MIME_TYPE,
-            },
-          })
-        } catch (error) {
-          return errorJson(errorMessage(error), 500)
-        }
-      },
+      POST: ({ request }) =>
+        Effect.runPromise(
+          processProductImageRequest(request).pipe(
+            Effect.catchAll((error) =>
+              Effect.succeed(productImageErrorResponse(error))
+            ),
+            Effect.catchAllDefect((defect) =>
+              Effect.succeed(errorJson(errorMessage(defect), 500))
+            )
+          )
+        ),
     },
   },
 })
 
-async function createForegroundCutout(image: Buffer, mimeType: string) {
-  const { removeBackground } = await loadBackgroundRemoval()
-  const blob = await removeBackground(
-    new Blob([Uint8Array.from(image)], { type: mimeType }),
-    {
-      model: "medium",
-      output: { format: "image/png" },
-      publicPath: getBackgroundRemovalPublicPath(),
-    }
-  )
+function processProductImageRequest(request: Request) {
+  return Effect.gen(function* () {
+    const file = yield* getProductImageFile(request)
+    const source = yield* readUploadBuffer(file)
+    const cutout = yield* createForegroundCutout(source, file.type)
+    const flattened = yield* flattenProductImage(cutout)
 
-  return Buffer.from(await blob.arrayBuffer())
+    return productImageResponse(flattened)
+  })
 }
 
-async function loadBackgroundRemoval() {
-  const module = await import("@imgly/background-removal-node")
+function getProductImageFile(request: Request) {
+  return Effect.gen(function* () {
+    const formData = yield* Effect.tryPromise({
+      catch: (cause) =>
+        new ProductImageRequestError({
+          cause,
+          message: "Upload one product image.",
+        }),
+      try: () => request.formData(),
+    })
+    const file = formData.get("file")
 
-  if (!isBackgroundRemovalNodeModule(module)) {
-    throw new Error("Could not load the background removal tool.")
+    if (!isUploadFile(file)) {
+      return yield* new ProductImageRequestError({
+        message: "Upload one product image.",
+      })
+    }
+
+    return yield* validateProductImageFile(file)
+  })
+}
+
+function validateProductImageFile(file: File) {
+  if (!PRODUCT_IMAGE_TYPES.has(file.type)) {
+    return Effect.fail(
+      new ProductImageRequestError({
+        message: "Upload a JPG, PNG, WebP, or AVIF image.",
+      })
+    )
   }
 
-  return module
+  if (file.size === 0) {
+    return Effect.fail(
+      new ProductImageRequestError({ message: "Product image is empty." })
+    )
+  }
+
+  if (file.size > MAX_PRODUCT_IMAGE_SIZE_BYTES) {
+    return Effect.fail(
+      new ProductImageRequestError({
+        message: "Product images must be 10 MB or smaller.",
+      })
+    )
+  }
+
+  return Effect.succeed(file)
+}
+
+function readUploadBuffer(file: File) {
+  return Effect.tryPromise({
+    catch: (cause) =>
+      new ProductImageProcessingError({
+        cause,
+        message: "Could not read the uploaded image.",
+      }),
+    try: async () => Buffer.from(await file.arrayBuffer()),
+  })
+}
+
+function createForegroundCutout(image: Buffer, mimeType: string) {
+  return Effect.gen(function* () {
+    const { removeBackground } = yield* loadBackgroundRemoval()
+    const publicPath = yield* getBackgroundRemovalPublicPath()
+    const blob = yield* Effect.tryPromise({
+      catch: (cause) =>
+        new ProductImageProcessingError({
+          cause,
+          message: "Could not remove the image background.",
+        }),
+      try: () =>
+        removeBackground(
+          new Blob([Uint8Array.from(image)], { type: mimeType }),
+          {
+            model: "medium",
+            output: { format: "image/png" },
+            publicPath,
+          }
+        ),
+    })
+
+    return yield* Effect.tryPromise({
+      catch: (cause) =>
+        new ProductImageProcessingError({
+          cause,
+          message: "Could not read the background removal result.",
+        }),
+      try: async () => Buffer.from(await blob.arrayBuffer()),
+    })
+  })
+}
+
+function loadBackgroundRemoval() {
+  return Effect.try({
+    catch: (cause) =>
+      new ProductImageProcessingError({
+        cause,
+        message: "Could not load the background removal tool.",
+      }),
+    try: () => nodeRequire("@imgly/background-removal-node"),
+  }).pipe(
+    Effect.flatMap((module) =>
+      isBackgroundRemovalNodeModule(module)
+        ? Effect.succeed(module)
+        : Effect.fail(
+            new ProductImageProcessingError({
+              message: "Could not load the background removal tool.",
+            })
+          )
+    )
+  )
 }
 
 function getBackgroundRemovalPublicPath() {
-  return pathToFileURL(
-    path.dirname(require.resolve("@imgly/background-removal-node")) + path.sep
-  ).href
+  return Effect.try({
+    catch: (cause) =>
+      new ProductImageProcessingError({
+        cause,
+        message: "Could not locate the background removal assets.",
+      }),
+    try: () =>
+      pathToFileURL(
+        path.dirname(nodeRequire.resolve("@imgly/background-removal-node")) +
+          path.sep
+      ).href,
+  })
+}
+
+function flattenProductImage(cutout: Buffer) {
+  return Effect.tryPromise({
+    catch: (cause) =>
+      new ProductImageProcessingError({
+        cause,
+        message: "Could not prepare the product image.",
+      }),
+    try: () =>
+      sharp(cutout)
+        .flatten({ background: PRODUCT_IMAGE_BACKGROUND })
+        .webp({ lossless: true })
+        .toBuffer(),
+  })
+}
+
+function productImageResponse(image: Buffer) {
+  return new Response(Uint8Array.from(image), {
+    headers: {
+      "cache-control": "no-store",
+      "content-length": String(image.byteLength),
+      "content-type": PRODUCT_IMAGE_OUTPUT_MIME_TYPE,
+    },
+  })
+}
+
+function productImageErrorResponse(error: ProductImageError) {
+  return errorJson(error.message, error.status)
 }
 
 function isBackgroundRemovalNodeModule(
   value: unknown
 ): value is BackgroundRemovalNodeModule {
   return isRecord(value) && typeof value.removeBackground === "function"
-}
-
-function assertProductImageFile(file: File) {
-  if (!PRODUCT_IMAGE_TYPES.has(file.type)) {
-    throw new Error("Upload a JPG, PNG, WebP, or AVIF image.")
-  }
-
-  if (file.size === 0) {
-    throw new Error("Product image is empty.")
-  }
-
-  if (file.size > MAX_PRODUCT_IMAGE_SIZE_BYTES) {
-    throw new Error("Product images must be 10 MB or smaller.")
-  }
 }
 
 function isUploadFile(value: FormDataEntryValue | null): value is File {

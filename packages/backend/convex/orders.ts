@@ -99,6 +99,8 @@ function customerOrder(order: CheckoutOrder) {
     trackingUrl: order.trackingUrl,
     amountTotalCents: order.amountTotalCents,
     currency: order.currency,
+    stripePresentmentAmountCents: order.stripePresentmentAmountCents,
+    stripePresentmentCurrency: order.stripePresentmentCurrency,
     productCount: order.productCount,
     failureReason: order.failureReason,
     createdAt: order.createdAt,

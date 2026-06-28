@@ -8,10 +8,15 @@ import {
 } from "@/lib/i18n"
 import {
   BASE_CURRENCY,
+  configuredEurToUsdRate,
+  convertMoneyCents,
+  formatExactMoney,
   formatMoney,
   normalizeCurrency,
   type CurrencyCode,
 } from "@/lib/money"
+import { api } from "@workspace/backend/api"
+import { useAction } from "convex/react"
 import {
   createContext,
   type ReactNode,
@@ -19,15 +24,23 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
+  useState,
 } from "react"
 import { useLocalStorage } from "usehooks-ts"
+
+const FALLBACK_EUR_TO_USD_RATE = configuredEurToUsdRate()
 
 type AppPreferencesContextValue = {
   locale: AppLocale
   currency: CurrencyCode
+  eurToUsdRate: number
+  convertPriceCents: (amountCents: number, sourceCurrency?: string) => number
   setLocale: (locale: AppLocale) => void
   setCurrency: (currency: CurrencyCode) => void
+  setEurToUsdRate: (eurToUsdRate: number) => void
   t: (key: TranslationKey) => string
+  formatExactPrice: (amountCents: number, currency: string) => string
   formatPrice: (amountCents: number, sourceCurrency?: string) => string
 }
 
@@ -54,6 +67,7 @@ function deserializeCurrency(value: string) {
 }
 
 export function AppPreferencesProvider({ children }: { children: ReactNode }) {
+  const [eurToUsdRate, setEurToUsdRate] = useState(FALLBACK_EUR_TO_USD_RATE)
   const [locale, setLocale] = useLocalStorage<AppLocale>(
     "golazo.locale",
     DEFAULT_LOCALE,
@@ -82,26 +96,61 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
     (key: TranslationKey) => translate(locale, key),
     [locale]
   )
+  const convertPriceCents = useCallback(
+    (amountCents: number, sourceCurrency = BASE_CURRENCY) =>
+      convertMoneyCents({
+        amountCents,
+        eurToUsdRate,
+        sourceCurrency,
+        targetCurrency: currency,
+      }),
+    [currency, eurToUsdRate]
+  )
   const formatPrice = useCallback(
     (amountCents: number, sourceCurrency = BASE_CURRENCY) =>
       formatMoney({
         amountCents,
         displayCurrency: currency,
+        eurToUsdRate,
         locale: currentLocale.intlLocale,
         sourceCurrency,
       }),
-    [currency, currentLocale.intlLocale]
+    [currency, currentLocale.intlLocale, eurToUsdRate]
+  )
+  const formatExactPrice = useCallback(
+    (amountCents: number, exactCurrency: string) =>
+      formatExactMoney({
+        amountCents,
+        currency: exactCurrency,
+        locale: currentLocale.intlLocale,
+      }),
+    [currentLocale.intlLocale]
   )
   const value = useMemo<AppPreferencesContextValue>(
     () => ({
+      convertPriceCents,
       currency,
+      eurToUsdRate,
+      formatExactPrice,
       formatPrice,
       locale,
       setCurrency,
+      setEurToUsdRate,
       setLocale,
       t,
     }),
-    [currency, formatPrice, locale, setCurrency, setLocale, t]
+    [
+      convertPriceCents,
+      currency,
+      eurToUsdRate,
+      formatExactPrice,
+      formatPrice,
+      locale,
+      setCurrency,
+      setEurToUsdRate,
+      setLocale,
+      t,
+    ]
   )
 
   return (
@@ -109,6 +158,29 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
       {children}
     </AppPreferencesContext.Provider>
   )
+}
+
+export function ServerCurrencyRateLoader() {
+  const getCurrencyRates = useAction(api.checkout.getCurrencyRates)
+  const { setEurToUsdRate } = useAppPreferences()
+  const didLoadRef = useRef(false)
+
+  useEffect(() => {
+    if (didLoadRef.current) {
+      return
+    }
+
+    didLoadRef.current = true
+
+    void getCurrencyRates({})
+      .then((rates) => {
+        setEurToUsdRate(rates.eurToUsdRate)
+        return null
+      })
+      .catch(() => null)
+  }, [getCurrencyRates, setEurToUsdRate])
+
+  return null
 }
 
 export function useAppPreferences() {
@@ -129,4 +201,8 @@ export function useTranslation() {
 
 export function useMoneyFormatter() {
   return useAppPreferences().formatPrice
+}
+
+export function useExactMoneyFormatter() {
+  return useAppPreferences().formatExactPrice
 }

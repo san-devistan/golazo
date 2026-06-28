@@ -157,7 +157,12 @@ export function SizeGuideDialog() {
   const unitValue = useMemo(() => [unitSystem], [unitSystem])
   const triggerButton = useMemo(
     () => (
-      <Button type="button" variant="link" size="sm" className="px-0 pl-0!" />
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="px-0 pl-0! underline"
+      />
     ),
     []
   )

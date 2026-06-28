@@ -35,7 +35,6 @@ const config = defineConfig({
   },
   plugins: [
     nitro({
-      traceDeps: ["@imgly/background-removal-node*"],
       rollupConfig: {
         onwarn: handleRollupWarning,
       },

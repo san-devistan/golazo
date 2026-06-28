@@ -12,7 +12,7 @@ import {
   cartConfigurationKey,
   useCustomerState,
 } from "@/lib/customer-state"
-import { useMoneyFormatter } from "@/lib/preferences"
+import { useMoneyFormatter, useTranslation } from "@/lib/preferences"
 import { displayOptionLabel, getErrorMessage, hasConvexUrl } from "@/lib/shop"
 import {
   productDetailQueryOptions,
@@ -32,6 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@workspace/ui/components/alert-dialog"
+import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -43,6 +44,7 @@ import { useAction } from "convex/react"
 import type { GenericId } from "convex/values"
 import {
   ArrowLeftIcon,
+  ExternalLinkIcon,
   MinusIcon,
   PencilIcon,
   PlusIcon,
@@ -335,8 +337,13 @@ function productConfiguratorReducer(
   }
 }
 
-function visibleProductMetadata(metadata: Array<ProductMetadata>) {
-  return metadata.filter((item) => item.showOnProductPage ?? true)
+function productMetadataForMode(
+  metadata: Array<ProductMetadata>,
+  mode: ProductRouteMode
+) {
+  return mode === "admin"
+    ? metadata
+    : metadata.filter((item) => item.showOnProductPage ?? true)
 }
 
 function productMetadataLinkHref(linkUrl: string | null | undefined) {
@@ -358,6 +365,18 @@ function productMetadataLinkHref(linkUrl: string | null | undefined) {
   }
 }
 
+function productMetadataLinkLabel(href: string) {
+  try {
+    const url = new URL(href)
+    const host = url.hostname.replace(/^www\./, "")
+    const path = url.pathname === "/" ? "" : url.pathname
+
+    return `${host}${path}`
+  } catch {
+    return "Open link"
+  }
+}
+
 function ProductMetadataValue({ item }: { item: ProductMetadata }) {
   const href = productMetadataLinkHref(
     item.type === "link" ? item.value : item.linkUrl
@@ -372,9 +391,11 @@ function ProductMetadataValue({ item }: { item: ProductMetadata }) {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="underline underline-offset-4 transition hover:text-primary"
+      title={href}
+      className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-semibold text-foreground transition hover:border-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
     >
-      {item.value}
+      <ExternalLinkIcon className="size-3.5 shrink-0" />
+      <span className="min-w-0 truncate">{productMetadataLinkLabel(href)}</span>
     </a>
   )
 }
@@ -533,6 +554,7 @@ function useProductConfiguratorElement({
   const deleteProduct = useAction(api.cloudinary.deleteProduct)
   const customerState = useCustomerState()
   const formatPrice = useMoneyFormatter()
+  const t = useTranslation()
   const [state, dispatch] = useReducer(
     productConfiguratorReducer,
     detail,
@@ -595,8 +617,8 @@ function useProductConfiguratorElement({
   )
   const galleryImages = useMemo(() => productGalleryImages(detail), [detail])
   const metadata = useMemo(
-    () => visibleProductMetadata(detail.metadata),
-    [detail.metadata]
+    () => productMetadataForMode(detail.metadata, mode),
+    [detail.metadata, mode]
   )
   const hasSizeOption = detail.options.some(
     (option) =>
@@ -769,9 +791,21 @@ function useProductConfiguratorElement({
                 <Separator className="my-5" />
                 <dl className="grid grid-cols-2 gap-3 text-sm">
                   {metadata.map((item) => (
-                    <div key={item._id} className="rounded-lg bg-muted p-3">
-                      <dt className="text-xs text-muted-foreground">
-                        {item.label}
+                    <div
+                      key={item._id}
+                      className={cn(
+                        "rounded-lg bg-muted p-3",
+                        item.showOnProductPage === false &&
+                          "border border-dashed border-muted-foreground/40 bg-muted/50"
+                      )}
+                    >
+                      <dt className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="min-w-0 truncate">{item.label}</span>
+                        {item.showOnProductPage === false && (
+                          <Badge variant="outline" className="h-4 px-1.5">
+                            Hidden
+                          </Badge>
+                        )}
                       </dt>
                       <dd className="mt-1 font-medium">
                         <ProductMetadataValue item={item} />
@@ -856,7 +890,7 @@ function useProductConfiguratorElement({
                 }}
                 className="h-14 flex-1 justify-between rounded-none px-5 text-sm font-black"
               >
-                <span>Ajouter au panier</span>
+                <span>{t("addToCart")}</span>
                 <span className="relative grid size-6 place-items-center">
                   <ShoppingCartIcon className="size-5" />
                   <PlusIcon className="absolute right-0 bottom-0 size-3 rounded-full bg-foreground text-background" />

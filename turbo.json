@@ -4,7 +4,12 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "env": ["ADMIN_PASSWORD", "VITE_CONVEX_SITE_URL", "VITE_CONVEX_URL"],
+      "env": [
+        "ADMIN_PASSWORD",
+        "npm_config_onnxruntime_node_install_cuda",
+        "VITE_CONVEX_SITE_URL",
+        "VITE_CONVEX_URL"
+      ],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".output/**", ".vercel/output/**"]
     },

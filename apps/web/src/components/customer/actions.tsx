@@ -3,14 +3,14 @@ import { CartSheet } from "@/components/customer/cart-sheet"
 import { HeaderIconButton } from "@/components/customer/icon-button"
 import { WishlistSheet } from "@/components/customer/wishlist-sheet"
 import { useCustomerState } from "@/lib/customer-state"
-import { useTranslation } from "@/lib/preferences"
+import { useAppPreferences } from "@/lib/preferences"
 import { useNavigate } from "@tanstack/react-router"
 import { HeartIcon, ShoppingBagIcon, UserIcon } from "lucide-react"
 import { useCallback, useState } from "react"
 
 export function CustomerActions() {
   const navigate = useNavigate()
-  const t = useTranslation()
+  const { currency, t } = useAppPreferences()
   const {
     cartCount,
     cartItems,
@@ -52,11 +52,11 @@ export function CustomerActions() {
     setIsCheckingOut(true)
 
     try {
-      await startCheckout()
+      await startCheckout(currency)
     } finally {
       setIsCheckingOut(false)
     }
-  }, [startCheckout])
+  }, [currency, startCheckout])
 
   return (
     <>

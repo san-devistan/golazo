@@ -7,6 +7,11 @@ import type { Doc } from "./_generated/dataModel.d.ts"
 import { internalMutation, type MutationCtx } from "./_generated/server"
 import { priceCartProductConfiguration } from "./cartPricing"
 import {
+  BASE_CURRENCY,
+  checkoutCurrencyValidator,
+  convertFromEurCents,
+} from "./currency"
+import {
   cartConfigurationSummaryValidator,
   checkoutOrderStatusValidator,
   checkoutShippingAddressValidator,
@@ -24,7 +29,7 @@ const checkoutOrderItemSnapshotValidator = v.object({
   productSlug: v.string(),
   imageUrl: v.union(v.string(), v.null()),
   unitPriceCents: v.number(),
-  currency: v.string(),
+  currency: checkoutCurrencyValidator,
   quantity: v.number(),
 })
 
@@ -42,6 +47,8 @@ type CompleteOrderArgs = {
   stripeCustomerId?: string
   stripePaymentIntentId?: string
   stripePaymentStatus?: string
+  stripePresentmentAmountCents?: number
+  stripePresentmentCurrency?: string
   customerEmail?: string | null
   customerPhone?: string | null
   shippingName?: string | null
@@ -107,6 +114,16 @@ function checkoutCompletionPatch(
   assignIfDefined(patch, "stripeCustomerId", args.stripeCustomerId)
   assignIfDefined(patch, "stripePaymentIntentId", args.stripePaymentIntentId)
   assignIfDefined(patch, "stripePaymentStatus", args.stripePaymentStatus)
+  assignIfDefined(
+    patch,
+    "stripePresentmentAmountCents",
+    args.stripePresentmentAmountCents
+  )
+  assignIfDefined(
+    patch,
+    "stripePresentmentCurrency",
+    args.stripePresentmentCurrency
+  )
   assignIfDefined(patch, "customerEmail", args.customerEmail)
   assignIfDefined(patch, "customerPhone", args.customerPhone)
   assignIfDefined(patch, "shippingName", args.shippingName)
@@ -162,12 +179,14 @@ async function clearPurchasedCartItems(
 export const createPendingOrderFromCart = internalMutation({
   args: {
     userTokenIdentifier: v.string(),
+    displayCurrency: checkoutCurrencyValidator,
+    eurToUsdRate: v.number(),
   },
   returns: v.object({
     orderId: v.id("checkoutOrders"),
     commandId: v.string(),
     amountTotalCents: v.number(),
-    currency: v.string(),
+    currency: checkoutCurrencyValidator,
     productCount: v.number(),
     items: v.array(checkoutOrderItemSnapshotValidator),
   }),
@@ -189,7 +208,6 @@ export const createPendingOrderFromCart = internalMutation({
     }
 
     const items: Array<CheckoutOrderItemSnapshot> = []
-    let currency: string | null = null
     let amountTotalCents = 0
     let productCount = 0
 
@@ -201,12 +219,17 @@ export const createPendingOrderFromCart = internalMutation({
         item.configurationSummary
       )
 
-      if (currency !== null && pricedProduct.currency !== currency) {
-        throw new Error("Checkout supports one currency at a time.")
+      if (pricedProduct.currency.toUpperCase() !== BASE_CURRENCY) {
+        throw new Error("Checkout products must be priced in EUR.")
       }
 
-      currency = pricedProduct.currency
-      amountTotalCents += pricedProduct.unitPriceCents * quantity
+      const unitPriceCents = convertFromEurCents({
+        amountCents: pricedProduct.unitPriceCents,
+        eurToUsdRate: args.eurToUsdRate,
+        targetCurrency: args.displayCurrency,
+      })
+
+      amountTotalCents += unitPriceCents * quantity
       productCount += quantity
       items.push({
         productId: item.productId,
@@ -215,13 +238,13 @@ export const createPendingOrderFromCart = internalMutation({
         productName: pricedProduct.productName,
         productSlug: pricedProduct.productSlug,
         imageUrl: pricedProduct.imageUrl,
-        unitPriceCents: pricedProduct.unitPriceCents,
-        currency: pricedProduct.currency,
+        unitPriceCents,
+        currency: args.displayCurrency,
         quantity,
       })
     }
 
-    if (amountTotalCents <= 0 || currency === null) {
+    if (amountTotalCents <= 0) {
       throw new Error("Checkout amount must be greater than zero.")
     }
 
@@ -233,7 +256,7 @@ export const createPendingOrderFromCart = internalMutation({
       dropId: null,
       trackId: null,
       amountTotalCents,
-      currency,
+      currency: args.displayCurrency,
       productCount,
       createdAt: now,
       updatedAt: now,
@@ -254,7 +277,7 @@ export const createPendingOrderFromCart = internalMutation({
       orderId,
       commandId,
       amountTotalCents,
-      currency,
+      currency: args.displayCurrency,
       productCount,
       items,
     }
@@ -317,6 +340,8 @@ export const completeOrderFromCheckoutSession = internalMutation({
     stripeCustomerId: v.optional(v.string()),
     stripePaymentIntentId: v.optional(v.string()),
     stripePaymentStatus: v.optional(v.string()),
+    stripePresentmentAmountCents: v.optional(v.number()),
+    stripePresentmentCurrency: v.optional(v.string()),
     customerEmail: v.optional(v.union(v.string(), v.null())),
     customerPhone: v.optional(v.union(v.string(), v.null())),
     shippingName: v.optional(v.union(v.string(), v.null())),
