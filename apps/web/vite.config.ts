@@ -46,6 +46,10 @@ const config = defineConfig({
     tanstackStart({
       router: {
         routeFileIgnorePattern: "\\.js$",
+        routeTreeFileHeader: [
+          "// @ts-nocheck",
+          "// noinspection JSUnusedGlobalSymbols",
+        ],
       },
     }),
     viteReact(),

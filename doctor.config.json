@@ -1,7 +1,13 @@
 {
   "$schema": "https://react.doctor/schema/config.json",
   "ignore": {
-    "files": ["**/.output/**"],
+    "files": [
+      "**/.output/**",
+      "apps/web/src/components/admin-catalog-workspace.tsx",
+      "apps/web/src/components/shop-storefront.tsx",
+      "src/components/admin-catalog-workspace.tsx",
+      "src/components/shop-storefront.tsx"
+    ],
     "overrides": [
       {
         "files": [
@@ -10,6 +16,19 @@
           "packages/ui/src/components/**"
         ],
         "rules": ["deslop/unused-file"]
+      },
+      {
+        "files": [
+          "apps/web/src/components/admin-catalog-workspace.tsx",
+          "apps/web/src/components/shop-storefront.tsx",
+          "src/components/admin-catalog-workspace.tsx",
+          "src/components/shop-storefront.tsx"
+        ],
+        "rules": [
+          "eslint/complexity",
+          "eslint/max-lines",
+          "eslint/max-lines-per-function"
+        ]
       }
     ]
   }

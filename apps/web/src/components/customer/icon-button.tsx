@@ -19,8 +19,8 @@ export function HeaderIconButton({
       type="button"
       aria-label={label}
       className={cn(
-        "relative grid size-9 place-items-center transition outline-none hover:bg-[#f1f1f1] focus-visible:ring-2 focus-visible:ring-[#111]/30",
-        isActive && "bg-[#111] text-white hover:bg-[#222]"
+        "relative grid size-[34px] place-items-center bg-transparent text-[#111] transition outline-none hover:opacity-65 focus-visible:ring-2 focus-visible:ring-[#111]/30",
+        isActive && "text-[#111]"
       )}
       onClick={onClick}
     >

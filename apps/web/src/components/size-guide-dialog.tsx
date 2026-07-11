@@ -2,7 +2,6 @@ import { Button } from "@workspace/ui/components/button"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -178,14 +177,11 @@ export function SizeGuideDialog() {
     <Dialog>
       <DialogTrigger render={triggerButton}>
         <RulerIcon data-icon="inline-start" />
-        Size guide
+        Guide
       </DialogTrigger>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Size guide</DialogTitle>
-          <DialogDescription>
-            Height and weight references by jersey size.
-          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">

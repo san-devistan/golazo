@@ -4,7 +4,6 @@ import { normalizeCatalogPath } from "@/lib/catalog-navigation"
 import { hasConvexUrl } from "@/lib/shop"
 import { categoryPathPageQueryOptions } from "@/lib/shop-queries"
 import { createFileRoute } from "@tanstack/react-router"
-/* eslint-disable no-underscore-dangle */
 
 export const Route = createFileRoute("/$")({
   loader: async ({ params, context: { queryClient } }) => {
@@ -12,8 +11,7 @@ export const Route = createFileRoute("/$")({
       return
     }
 
-    const pathParams = params as { _splat?: string }
-    const path = normalizeCatalogPath(pathParams._splat ?? "")
+    const path = normalizeCatalogPath(params["_splat"] ?? "")
 
     await queryClient.ensureQueryData(categoryPathPageQueryOptions(path))
   },
@@ -21,8 +19,8 @@ export const Route = createFileRoute("/$")({
 })
 
 function CategoryPathPage() {
-  const params = Route.useParams() as { _splat?: string }
-  const path = normalizeCatalogPath(params._splat ?? "")
+  const params = Route.useParams()
+  const path = normalizeCatalogPath(params["_splat"] ?? "")
 
   if (!hasConvexUrl()) {
     return <MissingBackend />

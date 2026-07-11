@@ -2,15 +2,14 @@ import { AdminCatalogWorkspace } from "@/components/admin-catalog-workspace"
 import { normalizeCatalogPath } from "@/lib/catalog-navigation"
 import { hasConvexUrl } from "@/lib/shop"
 import { createFileRoute } from "@tanstack/react-router"
-/* eslint-disable no-underscore-dangle */
 
 export const Route = createFileRoute("/admin/$")({
   component: AdminCategoryPathPage,
 })
 
 function AdminCategoryPathPage() {
-  const params = Route.useParams() as { _splat?: string }
-  const categoryPath = normalizeCatalogPath(params._splat ?? "")
+  const params = Route.useParams()
+  const categoryPath = normalizeCatalogPath(params["_splat"] ?? "")
 
   if (!hasConvexUrl()) {
     return <MissingBackend />

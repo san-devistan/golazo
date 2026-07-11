@@ -1,5 +1,3 @@
-/* eslint-disable no-await-in-loop -- Convex order writes are transactional. */
-
 import { v, type Infer } from "convex/values"
 
 import { internal } from "./_generated/api"
@@ -150,30 +148,32 @@ async function clearPurchasedCartItems(
     .withIndex("by_orderId", (q) => q.eq("orderId", order._id))
     .take(MAX_CHECKOUT_LINE_ITEMS)
 
-  for (const orderItem of orderItems) {
-    const cartItem = await ctx.db
-      .query("cartItems")
-      .withIndex("by_userTokenIdentifier_and_configurationKey", (q) =>
-        q
-          .eq("userTokenIdentifier", order.userTokenIdentifier)
-          .eq("configurationKey", orderItem.configurationKey)
-      )
-      .unique()
+  await Promise.all(
+    orderItems.map(async (orderItem) => {
+      const cartItem = await ctx.db
+        .query("cartItems")
+        .withIndex("by_userTokenIdentifier_and_configurationKey", (q) =>
+          q
+            .eq("userTokenIdentifier", order.userTokenIdentifier)
+            .eq("configurationKey", orderItem.configurationKey)
+        )
+        .unique()
 
-    if (!cartItem) {
-      continue
-    }
+      if (!cartItem) {
+        return
+      }
 
-    if (cartItem.quantity > orderItem.quantity) {
-      await ctx.db.patch(cartItem._id, {
-        quantity: cartItem.quantity - orderItem.quantity,
-        updatedAt: now,
-      })
-      continue
-    }
+      if (cartItem.quantity > orderItem.quantity) {
+        await ctx.db.patch(cartItem._id, {
+          quantity: cartItem.quantity - orderItem.quantity,
+          updatedAt: now,
+        })
+        return
+      }
 
-    await ctx.db.delete(cartItem._id)
-  }
+      await ctx.db.delete(cartItem._id)
+    })
+  )
 }
 
 export const createPendingOrderFromCart = internalMutation({
@@ -207,42 +207,43 @@ export const createPendingOrderFromCart = internalMutation({
       throw new Error("Your cart has too many unique items to checkout.")
     }
 
-    const items: Array<CheckoutOrderItemSnapshot> = []
-    let amountTotalCents = 0
-    let productCount = 0
+    const items = await Promise.all(
+      cartItems.map(async (item) => {
+        const quantity = normalizeQuantity(item.quantity)
+        const pricedProduct = await priceCartProductConfiguration(
+          ctx,
+          item.productId,
+          item.configurationSummary
+        )
 
-    for (const item of cartItems) {
-      const quantity = normalizeQuantity(item.quantity)
-      const pricedProduct = await priceCartProductConfiguration(
-        ctx,
-        item.productId,
-        item.configurationSummary
-      )
+        if (pricedProduct.currency.toUpperCase() !== BASE_CURRENCY) {
+          throw new Error("Checkout products must be priced in EUR.")
+        }
 
-      if (pricedProduct.currency.toUpperCase() !== BASE_CURRENCY) {
-        throw new Error("Checkout products must be priced in EUR.")
-      }
+        const unitPriceCents = convertFromEurCents({
+          amountCents: pricedProduct.unitPriceCents,
+          eurToUsdRate: args.eurToUsdRate,
+          targetCurrency: args.displayCurrency,
+        })
 
-      const unitPriceCents = convertFromEurCents({
-        amountCents: pricedProduct.unitPriceCents,
-        eurToUsdRate: args.eurToUsdRate,
-        targetCurrency: args.displayCurrency,
+        return {
+          productId: item.productId,
+          configurationKey: item.configurationKey,
+          configurationSummary: pricedProduct.configurationSummary,
+          productName: pricedProduct.productName,
+          productSlug: pricedProduct.productSlug,
+          imageUrl: pricedProduct.imageUrl,
+          unitPriceCents,
+          currency: args.displayCurrency,
+          quantity,
+        } satisfies CheckoutOrderItemSnapshot
       })
-
-      amountTotalCents += unitPriceCents * quantity
-      productCount += quantity
-      items.push({
-        productId: item.productId,
-        configurationKey: item.configurationKey,
-        configurationSummary: pricedProduct.configurationSummary,
-        productName: pricedProduct.productName,
-        productSlug: pricedProduct.productSlug,
-        imageUrl: pricedProduct.imageUrl,
-        unitPriceCents,
-        currency: args.displayCurrency,
-        quantity,
-      })
-    }
+    )
+    const amountTotalCents = items.reduce(
+      (total, item) => total + item.unitPriceCents * item.quantity,
+      0
+    )
+    const productCount = items.reduce((total, item) => total + item.quantity, 0)
 
     if (amountTotalCents <= 0) {
       throw new Error("Checkout amount must be greater than zero.")
@@ -265,13 +266,15 @@ export const createPendingOrderFromCart = internalMutation({
 
     await ctx.db.patch(orderId, { commandId })
 
-    for (const item of items) {
-      await ctx.db.insert("checkoutOrderItems", {
-        orderId,
-        ...item,
-        createdAt: now,
-      })
-    }
+    await Promise.all(
+      items.map((item) =>
+        ctx.db.insert("checkoutOrderItems", {
+          orderId,
+          ...item,
+          createdAt: now,
+        })
+      )
+    )
 
     return {
       orderId,

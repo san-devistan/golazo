@@ -12,7 +12,6 @@ import {
 import { useMoneyFormatter } from "@/lib/preferences"
 import { sortBySortOrder } from "@/lib/shop"
 import { Link } from "@tanstack/react-router"
-/* eslint-disable max-lines, react-perf/jsx-no-new-function-as-prop, react-perf/jsx-no-new-object-as-prop */
 import { Button } from "@workspace/ui/components/button"
 import {
   Carousel,
@@ -34,10 +33,21 @@ import {
   MailIcon,
   PackagePlusIcon,
   PencilIcon,
+  SearchIcon,
   SettingsIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  type ReactNode,
+  type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 
 export type StorefrontMode = "admin" | "public"
 
@@ -63,6 +73,7 @@ export type StorefrontProduct<
   basePriceCents: number
   currency: string
   imageUrl: string | null
+  imageUrls?: Array<string>
   sortOrder?: number
   status?: string
 }
@@ -82,6 +93,8 @@ const PRODUCT_LANE_CAROUSEL_OPTS = {
 } as const
 const CATEGORY_CAROUSEL_PRIORITY_VISIBLE_PRODUCT_COUNT =
   PRODUCT_LANE_DESKTOP_SCROLL_SIZE
+const GOLAZO_HERO_PRODUCTS_LIMIT = 24
+const GOLAZO_HERO_MARQUEE_PASSES = ["primary", "duplicate"] as const
 
 type ShopStorefrontProps<
   TCategory extends StorefrontCategory,
@@ -243,6 +256,11 @@ export function ShopStorefront<
   onReorderCategories,
   onReorderProducts,
 }: ShopStorefrontProps<TCategory, TProduct>) {
+  const [productSearch, setProductSearch] = useState("")
+  const filteredProducts = useFilteredStorefrontProducts(
+    products,
+    productSearch
+  )
   const visibleCategories = useMemo(
     () => sortBySortOrder(childCategories),
     [childCategories]
@@ -251,21 +269,21 @@ export function ShopStorefront<
     () =>
       currentCategory
         ? sortProducts(
-            products.filter(
+            filteredProducts.filter(
               (product) => product.categoryId === currentCategory._id
             )
           )
         : [],
-    [currentCategory, products]
+    [currentCategory, filteredProducts]
   )
   const categoryProductSections = useMemo(
     () =>
       buildCategoryProductSections({
         categories,
-        products,
+        products: filteredProducts,
         sectionCategories: visibleCategories,
       }),
-    [categories, products, visibleCategories]
+    [categories, filteredProducts, visibleCategories]
   )
   const hasCategories = visibleCategories.length > 0
   const isAdmin = mode === "admin"
@@ -275,6 +293,11 @@ export function ShopStorefront<
   const currentPageHref = currentCategory
     ? categoryHref(currentCategory, mode)
     : catalogRootHref(mode)
+  const isHomePage = !currentCategory && !isAdmin
+  const heroProducts = useMemo(
+    () => sortProducts(products).slice(0, GOLAZO_HERO_PRODUCTS_LIMIT),
+    [products]
+  )
   const contentState = buildStorefrontContentState({
     categoryProductSections,
     currentCategory,
@@ -293,9 +316,17 @@ export function ShopStorefront<
         currentCategoryId={currentCategory?._id}
         currentCategoryPath={currentCategory?.path}
         adminMode={isAdmin}
+        products={products}
       />
 
-      <section className="mx-auto max-w-[1536px] px-4 pt-6 pb-10 sm:px-6 lg:px-10">
+      <HomeHeroSlot
+        show={isHomePage}
+        currentPageHref={currentPageHref}
+        mode={mode}
+        products={heroProducts}
+      />
+
+      <section className={storefrontSectionClassName(isHomePage)}>
         {currentCategory?.path ? (
           <CategoryPageHeading
             canAddProduct={canAddProduct}
@@ -306,9 +337,13 @@ export function ShopStorefront<
             mode={mode}
             subtitle={subtitle}
             title={title ?? currentCategory.name}
+            productSearch={productSearch}
+            productSearchResultCount={filteredProducts.length}
+            showProductSearch={!isAdmin}
             onAddCategory={onAddCategory}
             onAddProduct={onAddProduct}
             onDeleteCategory={onDeleteCategory}
+            onProductSearchChange={setProductSearch}
           />
         ) : (
           <StorefrontPageHeading
@@ -340,6 +375,192 @@ export function ShopStorefront<
       </section>
       {!isAdmin && <ShopFooter categories={categories} />}
     </main>
+  )
+}
+
+function storefrontSectionClassName(hasHomeHero: boolean) {
+  return cn(
+    "mx-auto max-w-[1536px] px-4 pb-16 sm:px-6 lg:px-10",
+    hasHomeHero ? "pt-14" : "pt-6"
+  )
+}
+
+function HomeHeroSlot({
+  currentPageHref,
+  mode,
+  products,
+  show,
+}: {
+  currentPageHref: string
+  mode: StorefrontMode
+  products: Array<StorefrontProduct>
+  show: boolean
+}) {
+  if (!show) {
+    return null
+  }
+
+  return (
+    <GolazoHomeHero
+      currentPageHref={currentPageHref}
+      mode={mode}
+      products={products}
+    />
+  )
+}
+
+function useFilteredStorefrontProducts<TProduct extends StorefrontProduct>(
+  products: Array<TProduct>,
+  search: string
+) {
+  const normalizedSearch = search.trim().toLowerCase()
+
+  return useMemo(() => {
+    if (!normalizedSearch) {
+      return products
+    }
+
+    return products.filter((product) =>
+      product.name.toLowerCase().includes(normalizedSearch)
+    )
+  }, [normalizedSearch, products])
+}
+
+function GolazoHomeHero({
+  currentPageHref,
+  mode,
+  products,
+}: {
+  currentPageHref: string
+  mode: StorefrontMode
+  products: Array<StorefrontProduct>
+}) {
+  const formatPrice = useMoneyFormatter()
+  const marqueeDurationSeconds = Math.max(products.length * 4, 20)
+  const marqueeStyle = useMemo(
+    () => ({ animationDuration: `${marqueeDurationSeconds}s` }),
+    [marqueeDurationSeconds]
+  )
+
+  return (
+    <section className="overflow-hidden py-14">
+      <div className="mx-auto max-w-[1536px] px-4 sm:px-6 lg:px-10">
+        <p className="mb-3 text-xs tracking-[0.18em] text-black/55 uppercase">
+          2026 World Cup Collection
+        </p>
+        <h1 className="font-oswald text-6xl leading-[0.85] font-bold tracking-normal uppercase sm:text-7xl lg:text-8xl xl:text-[7rem]">
+          World Cup 26
+        </h1>
+        <div className="mt-6 flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between">
+          <p className="max-w-[44ch] text-lg leading-7 text-black/55">
+            Every national kit for 2026: engineered for the pitch, built for the
+            streets.
+          </p>
+          <Link
+            to={catalogRootHref(mode)}
+            className="group inline-flex w-fit items-center gap-2 font-oswald text-xl leading-none font-bold tracking-normal uppercase focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111]"
+          >
+            <span className="border-b-[3px] border-transparent transition group-hover:border-current group-focus-visible:border-current">
+              See all
+            </span>
+            <ArrowRightIcon className="size-5 transition group-hover:translate-x-1 group-focus-visible:translate-x-1" />
+          </Link>
+        </div>
+      </div>
+
+      {products.length > 0 && (
+        <div
+          className="mt-10 overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_6%,#000_94%,transparent)]"
+          aria-label="World Cup 26 jerseys"
+        >
+          <div
+            className="flex w-max motion-safe:[animation-iteration-count:infinite] motion-safe:[animation-name:golazo-marquee] motion-safe:[animation-timing-function:linear] motion-reduce:[animation:none] motion-reduce:overflow-x-auto"
+            style={marqueeStyle}
+          >
+            {GOLAZO_HERO_MARQUEE_PASSES.map((pass) =>
+              products.map((product) => (
+                <GolazoHeroProductCard
+                  key={`${pass}-${product._id}`}
+                  product={product}
+                  currentPageHref={currentPageHref}
+                  duplicate={pass === "duplicate"}
+                  formatPrice={formatPrice}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function GolazoHeroProductCard({
+  currentPageHref,
+  duplicate,
+  formatPrice,
+  product,
+}: {
+  currentPageHref: string
+  duplicate: boolean
+  formatPrice: (amountCents: number, sourceCurrency?: string) => string
+  product: StorefrontProduct
+}) {
+  const productParams = useMemo(
+    () => ({ slug: product.slug ?? "" }),
+    [product.slug]
+  )
+  const content = (
+    <span className="relative block aspect-[3/4] overflow-hidden bg-[#edf0f2]">
+      {product.imageUrl ? (
+        <img
+          src={product.imageUrl}
+          alt={duplicate ? "" : product.name}
+          loading={duplicate ? "lazy" : "eager"}
+          className="size-full object-cover object-top transition duration-500 group-hover:scale-[1.05]"
+        />
+      ) : (
+        <span className="flex size-full items-center justify-center px-5 text-center text-sm font-semibold text-black/45">
+          Image produit
+        </span>
+      )}
+      <span
+        aria-hidden="true"
+        className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-black/65 to-transparent"
+      />
+      <span className="absolute inset-x-0 bottom-0 z-10 flex items-baseline justify-between gap-3 p-4 text-white">
+        <span className="min-w-0 font-oswald text-sm leading-none font-bold tracking-normal uppercase">
+          {product.name}
+        </span>
+        <span className="shrink-0 text-sm">
+          {formatPrice(product.basePriceCents, product.currency)}
+        </span>
+      </span>
+    </span>
+  )
+
+  if (!product.slug) {
+    return (
+      <span
+        className="group mr-4 w-[150px] shrink-0 text-current no-underline sm:w-[220px] lg:w-[280px]"
+        aria-hidden={duplicate}
+      >
+        {content}
+      </span>
+    )
+  }
+
+  return (
+    <Link
+      to="/products/$slug"
+      params={productParams}
+      search={catalogBackHrefSearch(currentPageHref)}
+      className="group mr-4 w-[150px] shrink-0 text-current no-underline outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#111] sm:w-[220px] lg:w-[280px]"
+      aria-hidden={duplicate}
+      tabIndex={duplicate ? -1 : undefined}
+    >
+      {content}
+    </Link>
   )
 }
 
@@ -439,11 +660,15 @@ function CategoryPageHeading<TCategory extends StorefrontCategory>({
   isAdmin,
   kicker,
   mode,
+  productSearch,
+  productSearchResultCount,
+  showProductSearch,
   subtitle,
   title,
   onAddCategory,
   onAddProduct,
   onDeleteCategory,
+  onProductSearchChange,
 }: {
   canAddProduct: boolean
   categories: Array<TCategory>
@@ -451,27 +676,40 @@ function CategoryPageHeading<TCategory extends StorefrontCategory>({
   isAdmin: boolean
   kicker?: string
   mode: StorefrontMode
+  productSearch: string
+  productSearchResultCount: number
+  showProductSearch: boolean
   subtitle?: string
   title: string
   onAddCategory?: () => void
   onAddProduct?: () => void
   onDeleteCategory?: (category: TCategory) => void
+  onProductSearchChange: (value: string) => void
 }) {
   return (
-    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-      <ShopHierarchyNav
-        mode={mode}
-        categories={categories}
-        currentCategory={currentCategory}
-        className="min-w-0"
-      />
-      <div className="flex shrink-0 flex-col items-end gap-3 text-right lg:max-w-[48rem]">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] lg:items-start">
+      <div className="grid min-w-0 gap-4">
+        <ShopHierarchyNav
+          mode={mode}
+          categories={categories}
+          currentCategory={currentCategory}
+          className="min-w-0"
+        />
+        {showProductSearch && (
+          <CategoryProductSearch
+            value={productSearch}
+            resultCount={productSearchResultCount}
+            onChange={onProductSearchChange}
+          />
+        )}
+      </div>
+      <div className="flex shrink-0 flex-col items-start gap-3 text-left lg:items-end lg:text-right">
         {kicker && (
           <p className="text-xs font-bold tracking-[0.18em] uppercase">
             {kicker}
           </p>
         )}
-        <h1 className="font-oswald text-4xl leading-none font-black tracking-tight uppercase sm:text-5xl lg:text-6xl">
+        <h1 className="font-oswald text-4xl leading-[0.92] font-bold tracking-normal uppercase sm:text-5xl">
           {title}
         </h1>
         {subtitle && (
@@ -487,6 +725,65 @@ function CategoryPageHeading<TCategory extends StorefrontCategory>({
           />
         )}
       </div>
+    </div>
+  )
+}
+
+function CategoryProductSearch({
+  resultCount,
+  value,
+  onChange,
+}: {
+  resultCount: number
+  value: string
+  onChange: (value: string) => void
+}) {
+  const hasSearch = value.trim().length > 0
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onChange(event.target.value)
+    },
+    [onChange]
+  )
+  const handleClear = useCallback(() => {
+    onChange("")
+  }, [onChange])
+
+  return (
+    <div className="grid gap-2">
+      <div className="relative">
+        <label className="sr-only" htmlFor="collection-product-search">
+          Search products
+        </label>
+        <input
+          id="collection-product-search"
+          type="text"
+          value={value}
+          placeholder="Search products"
+          className="h-[42px] w-full border border-black/15 bg-white px-3.5 pr-11 text-sm outline-none placeholder:text-black/55 focus:border-[#111]"
+          onChange={handleChange}
+        />
+        {hasSearch ? (
+          <button
+            type="button"
+            aria-label="Clear product search"
+            className="absolute inset-y-0 right-0 grid w-[42px] place-items-center text-black/55 transition hover:text-[#111] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#111]"
+            onClick={handleClear}
+          >
+            <XIcon className="size-4" />
+          </button>
+        ) : (
+          <SearchIcon
+            aria-hidden="true"
+            className="absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-black/55"
+          />
+        )}
+      </div>
+      {hasSearch && (
+        <p className="text-sm text-black/55" aria-live="polite">
+          {resultCount} {resultCount === 1 ? "product" : "products"} found
+        </p>
+      )}
     </div>
   )
 }
@@ -566,6 +863,11 @@ function AdminPageActions<TCategory extends StorefrontCategory>({
   onDeleteCategory?: (category: TCategory) => void
 }) {
   const categoryLabel = currentCategory ? "Add sub-category" : "Add category"
+  const handleDeleteCategory = useCallback(() => {
+    if (currentCategory) {
+      onDeleteCategory?.(currentCategory)
+    }
+  }, [currentCategory, onDeleteCategory])
 
   return (
     <div className="flex shrink-0 items-center gap-2">
@@ -601,7 +903,7 @@ function AdminPageActions<TCategory extends StorefrontCategory>({
           title="Delete category"
           aria-label="Delete category"
           className="rounded-none"
-          onClick={() => onDeleteCategory(currentCategory)}
+          onClick={handleDeleteCategory}
         >
           <Trash2Icon />
         </Button>
@@ -833,41 +1135,83 @@ function ProductGrid<TProduct extends StorefrontProduct>({
   const customerState = useCustomerState()
 
   return (
-    <div className="grid gap-x-2 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-x-6 gap-y-9 lg:grid-cols-4">
       {products.map((product, index) => (
-        <ProductCard
+        <ProductGridCard
           key={product._id}
           product={product}
+          products={products}
+          index={index}
+          categoryId={categoryId}
           currentPageHref={currentPageHref}
           mode={mode}
           customerState={customerState}
-          className="group min-w-0 border border-transparent pb-3 transition focus-within:border-[#111] hover:border-[#111]"
           onEditProduct={onEditProduct}
           onDeleteProduct={onDeleteProduct}
           onToggleProductVisibility={onToggleProductVisibility}
-          canMovePrevious={index > 0}
-          canMoveNext={index < products.length - 1}
-          onMovePrevious={
-            onReorderProducts
-              ? () =>
-                  onReorderProducts(
-                    categoryId,
-                    moveByOffset(products, index, -1).map((item) => item._id)
-                  )
-              : undefined
-          }
-          onMoveNext={
-            onReorderProducts
-              ? () =>
-                  onReorderProducts(
-                    categoryId,
-                    moveByOffset(products, index, 1).map((item) => item._id)
-                  )
-              : undefined
-          }
+          onReorderProducts={onReorderProducts}
         />
       ))}
     </div>
+  )
+}
+
+function ProductGridCard<TProduct extends StorefrontProduct>({
+  product,
+  products,
+  index,
+  categoryId,
+  currentPageHref,
+  mode,
+  customerState,
+  onEditProduct,
+  onDeleteProduct,
+  onToggleProductVisibility,
+  onReorderProducts,
+}: {
+  product: TProduct
+  products: Array<TProduct>
+  index: number
+  categoryId: TProduct["categoryId"]
+  currentPageHref: string
+  mode: StorefrontMode
+  customerState: ReturnType<typeof useCustomerState>
+  onEditProduct?: (product: TProduct) => void
+  onDeleteProduct?: (product: TProduct) => void
+  onToggleProductVisibility?: (product: TProduct) => void
+  onReorderProducts?: (
+    categoryId: TProduct["categoryId"],
+    orderedProductIds: Array<TProduct["_id"]>
+  ) => void
+}) {
+  const handleMovePrevious = useCallback(() => {
+    onReorderProducts?.(
+      categoryId,
+      moveByOffset(products, index, -1).map((item) => item._id)
+    )
+  }, [categoryId, index, onReorderProducts, products])
+  const handleMoveNext = useCallback(() => {
+    onReorderProducts?.(
+      categoryId,
+      moveByOffset(products, index, 1).map((item) => item._id)
+    )
+  }, [categoryId, index, onReorderProducts, products])
+
+  return (
+    <ProductCard
+      product={product}
+      currentPageHref={currentPageHref}
+      mode={mode}
+      customerState={customerState}
+      className="group min-w-0 outline-[1.5px] outline-transparent transition focus-within:outline-[#111] hover:outline-[#111]"
+      onEditProduct={onEditProduct}
+      onDeleteProduct={onDeleteProduct}
+      onToggleProductVisibility={onToggleProductVisibility}
+      canMovePrevious={index > 0}
+      canMoveNext={index < products.length - 1}
+      onMovePrevious={onReorderProducts ? handleMovePrevious : undefined}
+      onMoveNext={onReorderProducts ? handleMoveNext : undefined}
+    />
   )
 }
 
@@ -908,87 +1252,143 @@ function CategoryProductSections<
   hideEmptySections?: boolean
 }) {
   const isAdmin = mode === "admin"
-  const visibleSections =
-    hideEmptySections && !isAdmin
-      ? sections.filter((section) => section.products.length > 0)
-      : sections
+  const visibleSections = useMemo(
+    () =>
+      hideEmptySections && !isAdmin
+        ? sections.filter((section) => section.products.length > 0)
+        : sections,
+    [hideEmptySections, isAdmin, sections]
+  )
 
   return (
     <div className="space-y-12">
-      {visibleSections.map(({ category, products }, index) => (
-        <section key={category._id}>
-          <div
-            className={cn(
-              "group/section relative mb-5 flex min-w-0 items-center justify-start gap-4",
-              isAdmin && "pr-10 sm:pr-48"
-            )}
-          >
-            <Link
-              to={categoryHref(category, mode)}
-              className="inline-flex max-w-full min-w-0 items-center gap-3 border-b-4 border-transparent pb-1 text-left transition outline-none hover:border-current focus-visible:border-current focus-visible:ring-2 focus-visible:ring-[#111]/30"
-            >
-              <h2 className="truncate font-oswald text-4xl leading-none font-black tracking-tight uppercase sm:text-5xl">
-                {category.name}
-              </h2>
-              <ArrowRightIcon className="size-7 shrink-0" />
-            </Link>
-            {isAdmin && (
-              <CategorySectionAdminControls
-                category={category}
-                onEditCategory={onEditCategory}
-                onDeleteCategory={onDeleteCategory}
-                onToggleCategoryVisibility={onToggleCategoryVisibility}
-                canMovePrevious={index > 0}
-                canMoveNext={index < visibleSections.length - 1}
-                onMovePrevious={
-                  onReorderCategories
-                    ? () =>
-                        onReorderCategories(
-                          moveByOffset(
-                            visibleSections.map((section) => section.category),
-                            index,
-                            -1
-                          ).map((item) => item._id)
-                        )
-                    : undefined
-                }
-                onMoveNext={
-                  onReorderCategories
-                    ? () =>
-                        onReorderCategories(
-                          moveByOffset(
-                            visibleSections.map((section) => section.category),
-                            index,
-                            1
-                          ).map((item) => item._id)
-                        )
-                    : undefined
-                }
-              />
-            )}
-          </div>
-
-          {products.length > 0 ? (
-            <ProductLane
-              categoryId={category._id}
-              currentPageHref={currentPageHref}
-              mode={mode}
-              products={products}
-              onEditProduct={onEditProduct}
-              onDeleteProduct={onDeleteProduct}
-              onToggleProductVisibility={onToggleProductVisibility}
-              onReorderProducts={onReorderProducts}
-            />
-          ) : (
-            isAdmin && (
-              <div className="border border-dashed border-[#d9d9d9] bg-[#fafafa] px-4 py-6 text-sm font-semibold text-[#777]">
-                Aucun produit
-              </div>
-            )
-          )}
-        </section>
+      {visibleSections.map((section, index) => (
+        <CategoryProductSection
+          key={section.category._id}
+          section={section}
+          sections={visibleSections}
+          index={index}
+          isAdmin={isAdmin}
+          mode={mode}
+          currentPageHref={currentPageHref}
+          onEditCategory={onEditCategory}
+          onDeleteCategory={onDeleteCategory}
+          onToggleCategoryVisibility={onToggleCategoryVisibility}
+          onEditProduct={onEditProduct}
+          onDeleteProduct={onDeleteProduct}
+          onToggleProductVisibility={onToggleProductVisibility}
+          onReorderCategories={onReorderCategories}
+          onReorderProducts={onReorderProducts}
+        />
       ))}
     </div>
+  )
+}
+
+function CategoryProductSection<
+  TCategory extends StorefrontCategory,
+  TProduct extends StorefrontProduct<CustomerProductId, TCategory["_id"]>,
+>({
+  section,
+  sections,
+  index,
+  isAdmin,
+  mode,
+  currentPageHref,
+  onEditCategory,
+  onDeleteCategory,
+  onToggleCategoryVisibility,
+  onEditProduct,
+  onDeleteProduct,
+  onToggleProductVisibility,
+  onReorderCategories,
+  onReorderProducts,
+}: {
+  section: { category: TCategory; products: Array<TProduct> }
+  sections: Array<{ category: TCategory; products: Array<TProduct> }>
+  index: number
+  isAdmin: boolean
+  mode: StorefrontMode
+  currentPageHref: string
+  onEditCategory?: (category: TCategory) => void
+  onDeleteCategory?: (category: TCategory) => void
+  onToggleCategoryVisibility?: (category: TCategory) => void
+  onEditProduct?: (product: TProduct) => void
+  onDeleteProduct?: (product: TProduct) => void
+  onToggleProductVisibility?: (product: TProduct) => void
+  onReorderCategories?: (orderedCategoryIds: Array<TCategory["_id"]>) => void
+  onReorderProducts?: (
+    categoryId: TProduct["categoryId"],
+    orderedProductIds: Array<TProduct["_id"]>
+  ) => void
+}) {
+  const categories = useMemo(
+    () => sections.map((currentSection) => currentSection.category),
+    [sections]
+  )
+  const handleMovePrevious = useCallback(() => {
+    onReorderCategories?.(
+      moveByOffset(categories, index, -1).map((item) => item._id)
+    )
+  }, [categories, index, onReorderCategories])
+  const handleMoveNext = useCallback(() => {
+    onReorderCategories?.(
+      moveByOffset(categories, index, 1).map((item) => item._id)
+    )
+  }, [categories, index, onReorderCategories])
+  const { category, products } = section
+
+  return (
+    <section>
+      <div
+        className={cn(
+          "group/section relative mb-7 flex min-w-0 items-center justify-start gap-4",
+          isAdmin && "pr-10 sm:pr-48"
+        )}
+      >
+        <Link
+          to={categoryHref(category, mode)}
+          className="inline-flex max-w-full min-w-0 items-center gap-3 border-b-[3px] border-transparent pb-1 text-left transition outline-none hover:border-current focus-visible:border-current focus-visible:ring-2 focus-visible:ring-[#111]/30"
+        >
+          <h2 className="truncate font-oswald text-4xl leading-[0.92] font-bold tracking-normal uppercase sm:text-5xl">
+            {category.name}
+          </h2>
+          <ArrowRightIcon className="size-7 shrink-0" />
+        </Link>
+        {isAdmin && (
+          <CategorySectionAdminControls
+            category={category}
+            onEditCategory={onEditCategory}
+            onDeleteCategory={onDeleteCategory}
+            onToggleCategoryVisibility={onToggleCategoryVisibility}
+            canMovePrevious={index > 0}
+            canMoveNext={index < sections.length - 1}
+            onMovePrevious={
+              onReorderCategories ? handleMovePrevious : undefined
+            }
+            onMoveNext={onReorderCategories ? handleMoveNext : undefined}
+          />
+        )}
+      </div>
+      {products.length > 0 ? (
+        <ProductLane
+          categoryId={category._id}
+          currentPageHref={currentPageHref}
+          mode={mode}
+          products={products}
+          onEditProduct={onEditProduct}
+          onDeleteProduct={onDeleteProduct}
+          onToggleProductVisibility={onToggleProductVisibility}
+          onReorderProducts={onReorderProducts}
+        />
+      ) : (
+        isAdmin && (
+          <div className="border border-dashed border-[#d9d9d9] bg-[#fafafa] px-4 py-6 text-sm font-semibold text-[#777]">
+            Aucun produit
+          </div>
+        )
+      )}
+    </section>
   )
 }
 
@@ -1012,6 +1412,12 @@ function CategorySectionAdminControls<TCategory extends StorefrontCategory>({
   onMoveNext?: () => void
 }) {
   const showOrderControls = onMovePrevious || onMoveNext
+  const handleEdit = useCallback(() => {
+    onEditCategory?.(category)
+  }, [category, onEditCategory])
+  const handleDelete = useCallback(() => {
+    onDeleteCategory?.(category)
+  }, [category, onDeleteCategory])
 
   return (
     <>
@@ -1047,14 +1453,14 @@ function CategorySectionAdminControls<TCategory extends StorefrontCategory>({
         <CardIconButton
           title="Edit category"
           variant="outline"
-          onClick={() => onEditCategory?.(category)}
+          onClick={handleEdit}
         >
           <PencilIcon />
         </CardIconButton>
         <CardIconButton
           title="Delete category"
           variant="destructive"
-          onClick={() => onDeleteCategory?.(category)}
+          onClick={handleDelete}
         >
           <Trash2Icon />
         </CardIconButton>
@@ -1083,76 +1489,115 @@ function CategoryLane<TCategory extends StorefrontCategory>({
   return (
     <div className="grid gap-x-2 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
       {categories.map((category, index) => (
-        <article
+        <CategoryLaneCard
           key={category._id}
-          className="group relative min-w-0 outline-none"
-        >
-          <Link to={categoryHref(category, mode)} className="block">
-            <div className="flex aspect-[4/5] items-end bg-[#ededed] p-5 transition group-hover:bg-[#e3e3e3]">
-              <div>
-                <h2 className="font-oswald text-3xl leading-none font-black tracking-tight uppercase">
-                  {category.name}
-                </h2>
-              </div>
-              <ArrowRightIcon className="absolute right-5 bottom-5 size-5 transition group-hover:translate-x-1" />
-            </div>
-          </Link>
-          {isAdmin && onToggleCategoryVisibility && (
-            <CategoryVisibilityIconButton
-              category={category}
-              className="group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
-              onToggleCategoryVisibility={onToggleCategoryVisibility}
-            />
-          )}
-          {isAdmin && (
-            <CardAdminOverlay>
-              {onReorderCategories && (
-                <>
-                  <AdminOrderIconButton
-                    direction="left"
-                    label="Move category left"
-                    disabled={index === 0}
-                    onClick={() =>
-                      onReorderCategories(
-                        moveByOffset(categories, index, -1).map(
-                          (item) => item._id
-                        )
-                      )
-                    }
-                  />
-                  <AdminOrderIconButton
-                    direction="right"
-                    label="Move category right"
-                    disabled={index === categories.length - 1}
-                    onClick={() =>
-                      onReorderCategories(
-                        moveByOffset(categories, index, 1).map(
-                          (item) => item._id
-                        )
-                      )
-                    }
-                  />
-                </>
-              )}
-              <CardIconButton
-                title="Edit category"
-                variant="outline"
-                onClick={() => onEditCategory?.(category)}
-              >
-                <PencilIcon />
-              </CardIconButton>
-              <CardIconButton
-                title="Delete category"
-                variant="destructive"
-                onClick={() => onDeleteCategory?.(category)}
-              >
-                <Trash2Icon />
-              </CardIconButton>
-            </CardAdminOverlay>
-          )}
-        </article>
+          category={category}
+          categories={categories}
+          index={index}
+          isAdmin={isAdmin}
+          mode={mode}
+          onEditCategory={onEditCategory}
+          onDeleteCategory={onDeleteCategory}
+          onToggleCategoryVisibility={onToggleCategoryVisibility}
+          onReorderCategories={onReorderCategories}
+        />
       ))}
     </div>
+  )
+}
+
+function CategoryLaneCard<TCategory extends StorefrontCategory>({
+  category,
+  categories,
+  index,
+  isAdmin,
+  mode,
+  onEditCategory,
+  onDeleteCategory,
+  onToggleCategoryVisibility,
+  onReorderCategories,
+}: {
+  category: TCategory
+  categories: Array<TCategory>
+  index: number
+  isAdmin: boolean
+  mode: StorefrontMode
+  onEditCategory?: (category: TCategory) => void
+  onDeleteCategory?: (category: TCategory) => void
+  onToggleCategoryVisibility?: (category: TCategory) => void
+  onReorderCategories?: (orderedCategoryIds: Array<TCategory["_id"]>) => void
+}) {
+  const handleMovePrevious = useCallback(() => {
+    onReorderCategories?.(
+      moveByOffset(categories, index, -1).map((item) => item._id)
+    )
+  }, [categories, index, onReorderCategories])
+  const handleMoveNext = useCallback(() => {
+    onReorderCategories?.(
+      moveByOffset(categories, index, 1).map((item) => item._id)
+    )
+  }, [categories, index, onReorderCategories])
+  const handleEdit = useCallback(() => {
+    onEditCategory?.(category)
+  }, [category, onEditCategory])
+  const handleDelete = useCallback(() => {
+    onDeleteCategory?.(category)
+  }, [category, onDeleteCategory])
+
+  return (
+    <article className="group relative min-w-0 outline-none">
+      <Link to={categoryHref(category, mode)} className="block">
+        <div className="flex aspect-[4/5] items-end bg-[#ededed] p-5 transition group-hover:bg-[#e3e3e3]">
+          <div>
+            <h2 className="font-oswald text-3xl leading-none font-black tracking-tight uppercase">
+              {category.name}
+            </h2>
+          </div>
+          <ArrowRightIcon className="absolute right-5 bottom-5 size-5 transition group-hover:translate-x-1" />
+        </div>
+      </Link>
+      {isAdmin && onToggleCategoryVisibility && (
+        <CategoryVisibilityIconButton
+          category={category}
+          className="group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
+          onToggleCategoryVisibility={onToggleCategoryVisibility}
+        />
+      )}
+      {isAdmin && (
+        <CardAdminOverlay>
+          {onReorderCategories && (
+            <>
+              <AdminOrderIconButton
+                direction="left"
+                label="Move category left"
+                disabled={index === 0}
+                onClick={handleMovePrevious}
+              />
+              <AdminOrderIconButton
+                direction="right"
+                label="Move category right"
+                disabled={index === categories.length - 1}
+                onClick={handleMoveNext}
+              />
+            </>
+          )}
+          <CardIconButton
+            title="Edit category"
+            variant="outline"
+            onClick={handleEdit}
+          >
+            <PencilIcon />
+          </CardIconButton>
+          <CardIconButton
+            title="Delete category"
+            variant="destructive"
+            onClick={handleDelete}
+          >
+            <Trash2Icon />
+          </CardIconButton>
+        </CardAdminOverlay>
+      )}
+    </article>
   )
 }
 
@@ -1180,6 +1625,21 @@ function ProductLane<TProduct extends StorefrontProduct>({
 }) {
   const customerState = useCustomerState()
 
+  if (mode === "public") {
+    return (
+      <ProductGrid
+        categoryId={categoryId}
+        currentPageHref={currentPageHref}
+        mode={mode}
+        products={products}
+        onEditProduct={onEditProduct}
+        onDeleteProduct={onDeleteProduct}
+        onToggleProductVisibility={onToggleProductVisibility}
+        onReorderProducts={onReorderProducts}
+      />
+    )
+  }
+
   return (
     <Carousel opts={PRODUCT_LANE_CAROUSEL_OPTS} className="relative">
       <CarouselContent className="-ml-2 md:-ml-3">
@@ -1188,37 +1648,18 @@ function ProductLane<TProduct extends StorefrontProduct>({
             key={product._id}
             className="basis-[78%] pl-2 sm:basis-[44%] md:basis-[31.5%] md:pl-3 lg:basis-[23.5%]"
           >
-            <ProductCard
+            <ProductLaneCard
               product={product}
+              products={products}
+              index={index}
+              categoryId={categoryId}
               currentPageHref={currentPageHref}
               mode={mode}
               customerState={customerState}
-              className="group h-full border border-transparent pb-3 transition focus-within:border-[#111] hover:border-[#111]"
               onEditProduct={onEditProduct}
               onDeleteProduct={onDeleteProduct}
               onToggleProductVisibility={onToggleProductVisibility}
-              canMovePrevious={index > 0}
-              canMoveNext={index < products.length - 1}
-              onMovePrevious={
-                onReorderProducts
-                  ? () =>
-                      onReorderProducts(
-                        categoryId,
-                        moveByOffset(products, index, -1).map(
-                          (item) => item._id
-                        )
-                      )
-                  : undefined
-              }
-              onMoveNext={
-                onReorderProducts
-                  ? () =>
-                      onReorderProducts(
-                        categoryId,
-                        moveByOffset(products, index, 1).map((item) => item._id)
-                      )
-                  : undefined
-              }
+              onReorderProducts={onReorderProducts}
             />
           </CarouselItem>
         ))}
@@ -1227,6 +1668,65 @@ function ProductLane<TProduct extends StorefrontProduct>({
       <ProductCarouselArrow direction="previous" />
       <ProductCarouselArrow direction="next" />
     </Carousel>
+  )
+}
+
+function ProductLaneCard<TProduct extends StorefrontProduct>({
+  product,
+  products,
+  index,
+  categoryId,
+  currentPageHref,
+  mode,
+  customerState,
+  onEditProduct,
+  onDeleteProduct,
+  onToggleProductVisibility,
+  onReorderProducts,
+}: {
+  product: TProduct
+  products: Array<TProduct>
+  index: number
+  categoryId: TProduct["categoryId"]
+  currentPageHref: string
+  mode: StorefrontMode
+  customerState: ReturnType<typeof useCustomerState>
+  onEditProduct?: (product: TProduct) => void
+  onDeleteProduct?: (product: TProduct) => void
+  onToggleProductVisibility?: (product: TProduct) => void
+  onReorderProducts?: (
+    categoryId: TProduct["categoryId"],
+    orderedProductIds: Array<TProduct["_id"]>
+  ) => void
+}) {
+  const handleMovePrevious = useCallback(() => {
+    onReorderProducts?.(
+      categoryId,
+      moveByOffset(products, index, -1).map((item) => item._id)
+    )
+  }, [categoryId, index, onReorderProducts, products])
+  const handleMoveNext = useCallback(() => {
+    onReorderProducts?.(
+      categoryId,
+      moveByOffset(products, index, 1).map((item) => item._id)
+    )
+  }, [categoryId, index, onReorderProducts, products])
+
+  return (
+    <ProductCard
+      product={product}
+      currentPageHref={currentPageHref}
+      mode={mode}
+      customerState={customerState}
+      className="group h-full outline-[1.5px] outline-transparent transition focus-within:outline-[#111] hover:outline-[#111]"
+      onEditProduct={onEditProduct}
+      onDeleteProduct={onDeleteProduct}
+      onToggleProductVisibility={onToggleProductVisibility}
+      canMovePrevious={index > 0}
+      canMoveNext={index < products.length - 1}
+      onMovePrevious={onReorderProducts ? handleMovePrevious : undefined}
+      onMoveNext={onReorderProducts ? handleMoveNext : undefined}
+    />
   )
 }
 
@@ -1312,6 +1812,10 @@ function ProductCarouselScrollbar() {
     scrollbarState.thumbWidth,
     updateThumbPosition,
   ])
+  const thumbStyle = useMemo(
+    () => ({ width: `${scrollbarState.thumbWidth}%` }),
+    [scrollbarState.thumbWidth]
+  )
 
   if (!scrollbarState.isScrollable) {
     return null
@@ -1332,9 +1836,7 @@ function ProductCarouselScrollbar() {
           ref={thumbRef}
           className="absolute top-0 left-0 h-full bg-[#111] will-change-transform"
           data-slot="carousel-scrollbar-thumb"
-          style={{
-            width: `${scrollbarState.thumbWidth}%`,
-          }}
+          style={thumbStyle}
         />
       </div>
     </div>
@@ -1349,7 +1851,7 @@ function clampCarouselProgress(value: number) {
   return Math.min(Math.max(value, 0), 1)
 }
 
-function ProductCard<TProduct extends StorefrontProduct>({
+export function ProductCard<TProduct extends StorefrontProduct>({
   product,
   currentPageHref,
   mode,
@@ -1376,9 +1878,15 @@ function ProductCard<TProduct extends StorefrontProduct>({
   onMovePrevious?: () => void
   onMoveNext?: () => void
 }) {
-  const productSnapshot = customerProductSnapshot(product)
+  const productSnapshot = useMemo(
+    () => customerProductSnapshot(product),
+    [product]
+  )
   const isFavorite = customerState.isWishlistProduct(productSnapshot.productId)
   const formatPrice = useMoneyFormatter()
+  const handleToggleFavorite = useCallback(() => {
+    void customerState.toggleWishlist(productSnapshot).catch(() => undefined)
+  }, [customerState, productSnapshot])
 
   return (
     <article className={className}>
@@ -1387,11 +1895,7 @@ function ProductCard<TProduct extends StorefrontProduct>({
         mode={mode}
         backHref={currentPageHref}
         isFavorite={isFavorite}
-        onToggleFavorite={() => {
-          void customerState
-            .toggleWishlist(productSnapshot)
-            .catch(() => undefined)
-        }}
+        onToggleFavorite={handleToggleFavorite}
         onEditProduct={onEditProduct}
         onDeleteProduct={onDeleteProduct}
         onToggleProductVisibility={onToggleProductVisibility}
@@ -1400,11 +1904,11 @@ function ProductCard<TProduct extends StorefrontProduct>({
         onMovePrevious={onMovePrevious}
         onMoveNext={onMoveNext}
       />
-      <div className="mt-3 flex items-start justify-between gap-3 px-2">
-        <h3 className="line-clamp-2 min-w-0 flex-1 font-oswald text-lg leading-5 font-semibold tracking-tight uppercase">
+      <div className="grid grid-cols-[minmax(0,1fr)_max-content] items-center gap-x-3 gap-y-2 px-2 py-3">
+        <h3 className="line-clamp-2 min-w-0 font-oswald text-[0.95rem] leading-[1.1] font-bold tracking-normal uppercase">
           {product.name}
         </h3>
-        <div className="shrink-0 font-oswald text-sm font-medium">
+        <div className="shrink-0 font-oswald text-sm leading-none font-medium tracking-normal">
           {formatPrice(product.basePriceCents, product.currency)}
         </div>
       </div>
@@ -1484,13 +1988,84 @@ function ProductMedia<TProduct extends StorefrontProduct>({
   onMovePrevious?: () => void
   onMoveNext?: () => void
 }) {
+  const imageUrls = productCardImageUrls(product)
+  const [activeImageIndex, setActiveImageIndex] = useState(0)
+  const [imageSlideDirection, setImageSlideDirection] = useState<
+    "next" | "previous" | "none"
+  >("none")
+  const hasMultipleImages = imageUrls.length > 1
+  const displayImageUrl = imageUrls[activeImageIndex] ?? imageUrls[0] ?? null
+  const handleMouseEnter = useCallback(() => {
+    if (hasMultipleImages) {
+      setImageSlideDirection("next")
+      setActiveImageIndex(1)
+    }
+  }, [hasMultipleImages])
+  const handleMouseLeave = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      const activeElement = document.activeElement
+
+      if (
+        activeElement instanceof HTMLElement &&
+        event.currentTarget.contains(activeElement)
+      ) {
+        activeElement.blur()
+      }
+
+      setImageSlideDirection("none")
+      setActiveImageIndex(0)
+    },
+    []
+  )
+  const handleShowPreviousImage = useCallback(() => {
+    setImageSlideDirection("previous")
+    setActiveImageIndex((currentIndex) =>
+      productGalleryIndexByOffset({
+        currentIndex,
+        imageCount: imageUrls.length,
+        offset: -1,
+      })
+    )
+  }, [imageUrls.length])
+  const handleShowNextImage = useCallback(() => {
+    setImageSlideDirection("next")
+    setActiveImageIndex((currentIndex) =>
+      productGalleryIndexByOffset({
+        currentIndex,
+        imageCount: imageUrls.length,
+        offset: 1,
+      })
+    )
+  }, [imageUrls.length])
+  const adminProductParams = useMemo(
+    () => ({ slug: product.slug ?? "" }),
+    [product.slug]
+  )
+  const productParams = useMemo(
+    () => ({ slug: product.slug ?? "" }),
+    [product.slug]
+  )
+  const handleToggleFavoriteClick = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      onToggleFavorite()
+    },
+    [onToggleFavorite]
+  )
   const mediaContent = (
     <>
-      {product.imageUrl ? (
+      {displayImageUrl ? (
         <img
-          src={product.imageUrl}
+          key={displayImageUrl}
+          src={displayImageUrl}
           alt={product.name}
-          className="size-full object-contain transition duration-300 hover:scale-[1.03]"
+          className={cn(
+            "size-full object-cover object-top",
+            imageSlideDirection !== "none" &&
+              "motion-safe:animate-[product-card-image-slide_360ms_ease-out]",
+            imageSlideDirection === "previous" &&
+              "motion-safe:[animation-direction:reverse]"
+          )}
         />
       ) : (
         <div className="flex size-full items-center justify-center px-6 text-center text-sm font-semibold text-[#777]">
@@ -1502,11 +2077,11 @@ function ProductMedia<TProduct extends StorefrontProduct>({
 
   if (mode === "admin") {
     return (
-      <div className="relative aspect-square overflow-hidden bg-[#eceff1]">
+      <div className="relative aspect-[3/4] overflow-hidden bg-[#edf0f2]">
         {product.slug ? (
           <Link
             to="/admin/products/$slug"
-            params={{ slug: product.slug }}
+            params={adminProductParams}
             search={catalogBackHrefSearch(backHref)}
             className="block size-full"
           >
@@ -1536,11 +2111,15 @@ function ProductMedia<TProduct extends StorefrontProduct>({
   }
 
   return (
-    <div className="relative aspect-square overflow-hidden bg-[#eceff1]">
+    <div
+      className="relative aspect-[3/4] overflow-hidden bg-[#edf0f2]"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       {product.slug ? (
         <Link
           to="/products/$slug"
-          params={{ slug: product.slug }}
+          params={productParams}
           search={catalogBackHrefSearch(backHref)}
           className="block size-full"
         >
@@ -1549,19 +2128,121 @@ function ProductMedia<TProduct extends StorefrontProduct>({
       ) : (
         mediaContent
       )}
+      {hasMultipleImages && (
+        <ProductCardGalleryControls
+          onPrevious={handleShowPreviousImage}
+          onNext={handleShowNextImage}
+        />
+      )}
       <WishlistHeartButton
         isFavorite={isFavorite}
         favoriteLabel="Remove from favorites"
         unfavoriteLabel="Add to favorites"
-        className="absolute top-3 right-3 z-10 size-6 border-0 bg-transparent p-0 hover:bg-transparent focus-visible:ring-2"
+        className="absolute top-2.5 right-2.5 z-10 size-8 border-0 bg-transparent p-0 opacity-65 transition hover:scale-110 hover:bg-transparent hover:opacity-100 focus-visible:ring-2"
         iconClassName="size-5"
-        onClick={(event) => {
-          event.stopPropagation()
-          onToggleFavorite()
-        }}
+        onClick={handleToggleFavoriteClick}
       />
     </div>
   )
+}
+
+function ProductCardGalleryControls({
+  onNext,
+  onPrevious,
+}: {
+  onNext: () => void
+  onPrevious: () => void
+}) {
+  return (
+    <div className="pointer-events-none absolute inset-x-2 top-1/2 z-20 flex -translate-y-1/2 items-center justify-between opacity-0 transition group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
+      <ProductCardGalleryButton
+        label="Show previous image"
+        onClick={onPrevious}
+      >
+        <ArrowLeftIcon className="size-4" />
+      </ProductCardGalleryButton>
+      <ProductCardGalleryButton label="Show next image" onClick={onNext}>
+        <ArrowRightIcon className="size-4" />
+      </ProductCardGalleryButton>
+    </div>
+  )
+}
+
+function ProductCardGalleryButton({
+  children,
+  label,
+  onClick,
+}: {
+  children: ReactNode
+  label: string
+  onClick: () => void
+}) {
+  const handleMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+    },
+    []
+  )
+  const handleClick = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.detail > 0) {
+        event.currentTarget.blur()
+        window.requestAnimationFrame(() => {
+          const activeElement = document.activeElement
+
+          if (activeElement instanceof HTMLElement) {
+            activeElement.blur()
+          }
+        })
+      }
+      onClick()
+    },
+    [onClick]
+  )
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      className="grid size-9 place-items-center bg-transparent text-[#111] transition hover:text-black/55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111]"
+      onMouseDown={handleMouseDown}
+      onClick={handleClick}
+    >
+      {children}
+    </button>
+  )
+}
+
+function productCardImageUrls(product: StorefrontProduct) {
+  const imageUrls = new Set<string>()
+
+  if (product.imageUrl) {
+    imageUrls.add(product.imageUrl)
+  }
+
+  for (const imageUrl of product.imageUrls ?? []) {
+    imageUrls.add(imageUrl)
+  }
+
+  return Array.from(imageUrls)
+}
+
+function productGalleryIndexByOffset({
+  currentIndex,
+  imageCount,
+  offset,
+}: {
+  currentIndex: number
+  imageCount: number
+  offset: number
+}) {
+  if (imageCount <= 0) {
+    return 0
+  }
+
+  return (currentIndex + offset + imageCount) % imageCount
 }
 
 function ProductImageAdminControls<TProduct extends StorefrontProduct>({
@@ -1582,6 +2263,12 @@ function ProductImageAdminControls<TProduct extends StorefrontProduct>({
   onMoveNext?: () => void
 }) {
   const showOrderControls = onMovePrevious || onMoveNext
+  const handleDelete = useCallback(() => {
+    onDeleteProduct?.(product)
+  }, [onDeleteProduct, product])
+  const handleEdit = useCallback(() => {
+    onEditProduct?.(product)
+  }, [onEditProduct, product])
 
   return (
     <>
@@ -1590,7 +2277,7 @@ function ProductImageAdminControls<TProduct extends StorefrontProduct>({
           <CardIconButton
             title="Delete product"
             variant="destructive"
-            onClick={() => onDeleteProduct(product)}
+            onClick={handleDelete}
           >
             <Trash2Icon />
           </CardIconButton>
@@ -1601,7 +2288,7 @@ function ProductImageAdminControls<TProduct extends StorefrontProduct>({
           <CardIconButton
             title="Edit product"
             variant="outline"
-            onClick={() => onEditProduct(product)}
+            onClick={handleEdit}
           >
             <PencilIcon />
           </CardIconButton>
@@ -1646,6 +2333,13 @@ function AdminOrderIconButton({
         : direction === "left"
           ? ArrowLeftIcon
           : ArrowRightIcon
+  const handleClick = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      onClick?.()
+    },
+    [onClick]
+  )
 
   return (
     <Button
@@ -1656,10 +2350,7 @@ function AdminOrderIconButton({
       aria-label={label}
       disabled={disabled || !onClick}
       className="rounded-none bg-white shadow-sm hover:bg-[#f1f1f1]"
-      onClick={(event) => {
-        event.stopPropagation()
-        onClick?.()
-      }}
+      onClick={handleClick}
     >
       <Icon />
     </Button>
@@ -1677,6 +2368,9 @@ function ProductVisibilityIconButton<TProduct extends StorefrontProduct>({
 }) {
   const isVisible = product.status === "published"
   const title = isVisible ? "Hide product" : "Publish product"
+  const handleToggle = useCallback(() => {
+    onToggleProductVisibility(product)
+  }, [onToggleProductVisibility, product])
 
   return (
     <VisibilityIconButton
@@ -1686,7 +2380,7 @@ function ProductVisibilityIconButton<TProduct extends StorefrontProduct>({
         "group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100",
         className
       )}
-      onClick={() => onToggleProductVisibility(product)}
+      onClick={handleToggle}
     />
   )
 }
@@ -1702,13 +2396,16 @@ function CategoryVisibilityIconButton<TCategory extends StorefrontCategory>({
 }) {
   const isVisible = category.isActive ?? true
   const title = isVisible ? "Hide category" : "Show category"
+  const handleToggle = useCallback(() => {
+    onToggleCategoryVisibility(category)
+  }, [category, onToggleCategoryVisibility])
 
   return (
     <VisibilityIconButton
       isVisible={isVisible}
       title={title}
       className={className}
-      onClick={() => onToggleCategoryVisibility(category)}
+      onClick={handleToggle}
     />
   )
 }
@@ -1724,6 +2421,14 @@ function VisibilityIconButton({
   className?: string
   onClick: () => void
 }) {
+  const handleClick = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation()
+      onClick()
+    },
+    [onClick]
+  )
+
   return (
     <button
       type="button"
@@ -1734,10 +2439,7 @@ function VisibilityIconButton({
         isVisible && "bg-[#111] text-white hover:bg-[#222]",
         className
       )}
-      onClick={(event) => {
-        event.stopPropagation()
-        onClick()
-      }}
+      onClick={handleClick}
     >
       {isVisible ? (
         <EyeIcon className="size-5" />

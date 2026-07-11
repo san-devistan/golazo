@@ -20,9 +20,9 @@ export function LocaleCurrencySwitcher() {
       <PopoverTrigger
         type="button"
         aria-label={t("preferencesLabel")}
-        className="inline-flex h-9 shrink-0 items-center gap-1.5 border border-[#d9d9d9] bg-white px-2 text-xs font-bold whitespace-nowrap text-[#111] transition hover:bg-[#f5f5f5] focus-visible:ring-2 focus-visible:ring-[#111]/30 focus-visible:outline-none"
+        className="inline-flex h-[34px] shrink-0 items-center gap-1.5 bg-transparent px-1 text-[0.8125rem] whitespace-nowrap text-[#111] transition hover:opacity-65 focus-visible:ring-2 focus-visible:ring-[#111]/30 focus-visible:outline-none"
       >
-        <LanguagesIcon className="size-4" />
+        <LanguagesIcon className="size-[17px]" />
         <span>
           {selectedLocale?.shortLabel ?? locale.toUpperCase()}/
           {selectedCurrency.code}

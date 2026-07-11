@@ -1,9 +1,9 @@
 import { CategoryContent } from "@/components/category-content"
 import { MissingBackend } from "@/components/missing-backend"
+import { categoryIdFromRouteParam } from "@/lib/route-params"
 import { hasConvexUrl } from "@/lib/shop"
-import { categoryPageQueryOptions, type CategoryId } from "@/lib/shop-queries"
+import { categoryPageQueryOptions } from "@/lib/shop-queries"
 import { createFileRoute } from "@tanstack/react-router"
-/* eslint-disable typescript/no-unsafe-type-assertion */
 
 export const Route = createFileRoute("/categories/$categoryId")({
   loader: async ({ params, context: { queryClient } }) => {
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/categories/$categoryId")({
     }
 
     await queryClient.ensureQueryData(
-      categoryPageQueryOptions(params.categoryId as CategoryId)
+      categoryPageQueryOptions(categoryIdFromRouteParam(params.categoryId))
     )
   },
   component: CategoryPage,
@@ -25,5 +25,5 @@ function CategoryPage() {
     return <MissingBackend />
   }
 
-  return <CategoryContent categoryId={categoryId as CategoryId} />
+  return <CategoryContent categoryId={categoryIdFromRouteParam(categoryId)} />
 }

@@ -1,14 +1,11 @@
 import { AdminCatalogWorkspace } from "@/components/admin-catalog-workspace"
+import { categoryIdFromRouteParam } from "@/lib/route-params"
 import { hasConvexUrl } from "@/lib/shop"
 import { createFileRoute } from "@tanstack/react-router"
-/* eslint-disable typescript/no-unsafe-type-assertion */
-import type { GenericId } from "convex/values"
 
 export const Route = createFileRoute("/admin/categories/$categoryId")({
   component: AdminCategoryPage,
 })
-
-type CategoryId = GenericId<"catalogCategories">
 
 function AdminCategoryPage() {
   const { categoryId } = Route.useParams()
@@ -17,7 +14,9 @@ function AdminCategoryPage() {
     return <MissingBackend />
   }
 
-  return <AdminCatalogWorkspace categoryId={categoryId as CategoryId} />
+  return (
+    <AdminCatalogWorkspace categoryId={categoryIdFromRouteParam(categoryId)} />
+  )
 }
 
 function MissingBackend() {

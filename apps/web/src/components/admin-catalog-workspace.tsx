@@ -10,7 +10,6 @@ import {
   sortBySortOrder,
 } from "@/lib/shop"
 import { Link } from "@tanstack/react-router"
-/* eslint-disable complexity, max-lines, max-lines-per-function, react-perf/jsx-no-new-array-as-prop, react-perf/jsx-no-new-function-as-prop */
 import { api } from "@workspace/backend/api"
 import {
   AlertDialog,
@@ -49,7 +48,14 @@ import {
   SaveIcon,
   Trash2Icon,
 } from "lucide-react"
-import { useEffect, useMemo, useReducer, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react"
 
 type CategoryId = GenericId<"catalogCategories">
 type ProductId = GenericId<"products">
@@ -152,6 +158,9 @@ type AdminProductRecord = {
 }
 
 const EMPTY_PRODUCT_RECORDS: Array<AdminProductRecord> = []
+const EMPTY_ADMIN_CATEGORIES: Array<AdminCategory> = []
+const EMPTY_OPTION_TEMPLATES: Array<AdminOptionTemplate> = []
+const EMPTY_ADMIN_PRODUCTS: Array<AdminProductRecord["product"]> = []
 
 type CategoryFormState = {
   categoryId: CategoryId | null
@@ -717,73 +726,102 @@ function useAdminCatalogWorkspaceElement({
     showBackendSetupState,
   } = catalogState
 
-  function setCategoryForm(
-    value: React.SetStateAction<CategoryFormState | null>
-  ) {
-    dispatchCatalog({ type: "setCategoryForm", value })
-  }
+  const setCategoryForm = useCallback(
+    (value: React.SetStateAction<CategoryFormState | null>) => {
+      dispatchCatalog({ type: "setCategoryForm", value })
+    },
+    []
+  )
 
-  function setProductForm(
-    value: React.SetStateAction<ProductFormState | null>
-  ) {
-    dispatchCatalog({ type: "setProductForm", value })
-  }
+  const setProductForm = useCallback(
+    (value: React.SetStateAction<ProductFormState | null>) => {
+      dispatchCatalog({ type: "setProductForm", value })
+    },
+    []
+  )
 
-  function setDeleteTarget(value: React.SetStateAction<DeleteTarget | null>) {
-    dispatchCatalog({ type: "setDeleteTarget", value })
-  }
+  const setDeleteTarget = useCallback(
+    (value: React.SetStateAction<DeleteTarget | null>) => {
+      dispatchCatalog({ type: "setDeleteTarget", value })
+    },
+    []
+  )
 
-  function setIsDeleting(value: React.SetStateAction<boolean>) {
+  const setIsDeleting = useCallback((value: React.SetStateAction<boolean>) => {
     dispatchCatalog({ type: "setIsDeleting", value })
-  }
+  }, [])
 
-  function setIsUploading(value: React.SetStateAction<boolean>) {
+  const setIsUploading = useCallback((value: React.SetStateAction<boolean>) => {
     dispatchCatalog({ type: "setIsUploading", value })
-  }
+  }, [])
 
-  function setShowBackendSetupState(value: React.SetStateAction<boolean>) {
-    dispatchCatalog({ type: "setShowBackendSetupState", value })
-  }
+  const setShowBackendSetupState = useCallback(
+    (value: React.SetStateAction<boolean>) => {
+      dispatchCatalog({ type: "setShowBackendSetupState", value })
+    },
+    []
+  )
 
-  const categories = data?.categories ?? []
-  const templates = data?.optionTemplates ?? []
+  const categories = data?.categories ?? EMPTY_ADMIN_CATEGORIES
+  const templates = data?.optionTemplates ?? EMPTY_OPTION_TEMPLATES
   const currentCategory = resolveCurrentCategory({
     categories,
     categoryId,
     categoryPath,
   })
   const parentId = currentCategory?._id ?? null
-  const childCategories = sortBySortOrder(
-    categories.filter((category) => category.parentId === parentId)
+  const childCategories = useMemo(
+    () =>
+      sortBySortOrder(
+        categories.filter((category) => category.parentId === parentId)
+      ),
+    [categories, parentId]
   )
   const productRecords = data?.products ?? EMPTY_PRODUCT_RECORDS
-  const pageCategoryIds = currentCategory
-    ? new Set<CategoryId>([
-        currentCategory._id,
-        ...childCategories.map((category) => category._id),
-      ])
-    : new Set<CategoryId>()
-  const pageProductRecords = sortProductRecords(
-    productRecords.filter(
-      (record) =>
-        !currentCategory || pageCategoryIds.has(record.product.categoryId)
-    )
+  const pageCategoryIds = useMemo(
+    () =>
+      currentCategory
+        ? new Set<CategoryId>([
+            currentCategory._id,
+            ...childCategories.map((category) => category._id),
+          ])
+        : new Set<CategoryId>(),
+    [childCategories, currentCategory]
   )
-  const directProductRecords = sortProductRecords(
-    currentCategory
-      ? productRecords.filter(
-          (record) => record.product.categoryId === currentCategory._id
+  const pageProductRecords = useMemo(
+    () =>
+      sortProductRecords(
+        productRecords.filter(
+          (record) =>
+            !currentCategory || pageCategoryIds.has(record.product.categoryId)
         )
-      : []
+      ),
+    [currentCategory, pageCategoryIds, productRecords]
+  )
+  const directProductRecords = useMemo(
+    () =>
+      sortProductRecords(
+        currentCategory
+          ? productRecords.filter(
+              (record) => record.product.categoryId === currentCategory._id
+            )
+          : EMPTY_PRODUCT_RECORDS
+      ),
+    [currentCategory, productRecords]
   )
   const canAddProduct = Boolean(currentCategory)
   const productRecordsById = useMemo(
     () => new Map(productRecords.map((record) => [record.product._id, record])),
     [productRecords]
   )
-  const productAssignableCategories = currentCategory
-    ? [currentCategory, ...childCategories]
-    : []
+  const productAssignableCategories = useMemo(
+    () => (currentCategory ? [currentCategory, ...childCategories] : []),
+    [childCategories, currentCategory]
+  )
+  const pageProducts = useMemo(
+    () => pageProductRecords.map((record) => record.product),
+    [pageProductRecords]
+  )
 
   useEffect(() => {
     if (data !== undefined) {
@@ -796,7 +834,7 @@ function useAdminCatalogWorkspaceElement({
     }, 4000)
 
     return () => window.clearTimeout(timeoutId)
-  }, [data])
+  }, [data, setShowBackendSetupState])
 
   useEffect(() => {
     if (data === undefined) {
@@ -823,158 +861,158 @@ function useAdminCatalogWorkspaceElement({
       "",
       `${url.pathname}${url.search}${url.hash}`
     )
-  }, [data, productRecords])
+  }, [data, productRecords, setProductForm])
 
-  if (data === undefined) {
-    if (showBackendSetupState) {
-      return <BackendSetupState />
-    }
+  const handleSaveCategory = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      if (!categoryForm) {
+        return
+      }
 
-    return (
-      <main className="min-h-svh bg-muted p-6">
-        <div className="mx-auto h-[42rem] max-w-7xl animate-pulse rounded-lg bg-background" />
-      </main>
-    )
-  }
+      try {
+        await upsertCategory({
+          categoryId: categoryForm.categoryId,
+          name: categoryForm.name,
+          parentId: categoryForm.parentId,
+          sortOrder: parseSortOrder(
+            categoryForm.sortOrder,
+            childCategories.length
+          ),
+          isActive: categoryForm.isActive,
+        })
+        toast.success("Category saved.")
+        setCategoryForm(null)
+      } catch (error) {
+        toast.error(getErrorMessage(error))
+      }
+    },
+    [categoryForm, childCategories.length, setCategoryForm, upsertCategory]
+  )
 
-  if (categoryPath && !currentCategory) {
-    return <AdminCategoryUnavailable categories={categories} />
-  }
+  const handleSaveProduct = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      if (!productForm?.categoryId) {
+        toast.error("Select a category before saving the product.")
+        return
+      }
 
-  async function handleSaveCategory(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!categoryForm) {
-      return
-    }
+      try {
+        const productSortFallback = productRecords.filter(
+          (record) => record.product.categoryId === productForm.categoryId
+        ).length
 
-    try {
-      await upsertCategory({
-        categoryId: categoryForm.categoryId,
-        name: categoryForm.name,
-        parentId: categoryForm.parentId,
-        sortOrder: parseSortOrder(
-          categoryForm.sortOrder,
-          childCategories.length
-        ),
-        isActive: categoryForm.isActive,
-      })
-      toast.success("Category saved.")
-      setCategoryForm(null)
-    } catch (error) {
-      toast.error(getErrorMessage(error))
-    }
-  }
+        await upsertProduct({
+          productId: productForm.productId,
+          categoryId: productForm.categoryId,
+          name: productForm.name,
+          description: productForm.description,
+          basePriceCents: priceInputToCents(productForm.basePrice),
+          currency: BASE_CURRENCY,
+          status: productForm.status,
+          sku: nullableText(productForm.sku),
+          cloudinaryAssetFolder: nullableText(
+            productForm.cloudinaryAssetFolder
+          ),
+          sortOrder: parseSortOrder(productForm.sortOrder, productSortFallback),
+          images: productForm.images.map((image, index) => ({
+            imageId: image.imageId,
+            imageUrl: image.imageUrl,
+            cloudinaryPublicId: nullableText(image.cloudinaryPublicId),
+            cloudinaryAssetFolder: nullableText(image.cloudinaryAssetFolder),
+            sortOrder: index,
+          })),
+          options: buildOptionsFromTemplates(productForm, templates),
+          metadata: productForm.metadata.map((item, index) => ({
+            metadataId: item.metadataId,
+            label: item.label,
+            type: item.type,
+            value: item.value,
+            linkUrl: null,
+            showOnProductPage: item.showOnProductPage,
+            sortOrder: index,
+          })),
+        })
+        toast.success("Product saved.")
+        setProductForm(null)
+      } catch (error) {
+        toast.error(getErrorMessage(error))
+      }
+    },
+    [productForm, productRecords, setProductForm, templates, upsertProduct]
+  )
 
-  async function handleSaveProduct(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!productForm?.categoryId) {
-      toast.error("Select a category before saving the product.")
-      return
-    }
+  const handleReorderCategories = useCallback(
+    async (orderedCategoryIds: Array<CategoryId>) => {
+      try {
+        await reorderCategories({
+          parentId,
+          orderedCategoryIds,
+        })
+        toast.success("Category order saved.")
+      } catch (error) {
+        toast.error(getErrorMessage(error))
+      }
+    },
+    [parentId, reorderCategories]
+  )
 
-    try {
-      const productSortFallback = productRecords.filter(
-        (record) => record.product.categoryId === productForm.categoryId
-      ).length
+  const handleReorderProducts = useCallback(
+    async (
+      productCategoryId: CategoryId,
+      orderedProductIds: Array<ProductId>
+    ) => {
+      try {
+        await reorderProducts({
+          categoryId: productCategoryId,
+          orderedProductIds,
+        })
+        toast.success("Product order saved.")
+      } catch (error) {
+        toast.error(getErrorMessage(error))
+      }
+    },
+    [reorderProducts]
+  )
 
-      await upsertProduct({
-        productId: productForm.productId,
-        categoryId: productForm.categoryId,
-        name: productForm.name,
-        description: productForm.description,
-        basePriceCents: priceInputToCents(productForm.basePrice),
-        currency: BASE_CURRENCY,
-        status: productForm.status,
-        sku: nullableText(productForm.sku),
-        cloudinaryAssetFolder: nullableText(productForm.cloudinaryAssetFolder),
-        sortOrder: parseSortOrder(productForm.sortOrder, productSortFallback),
-        images: productForm.images.map((image, index) => ({
-          imageId: image.imageId,
-          imageUrl: image.imageUrl,
-          cloudinaryPublicId: nullableText(image.cloudinaryPublicId),
-          cloudinaryAssetFolder: nullableText(image.cloudinaryAssetFolder),
-          sortOrder: index,
-        })),
-        options: buildOptionsFromTemplates(productForm, templates),
-        metadata: productForm.metadata.map((item, index) => ({
-          metadataId: item.metadataId,
-          label: item.label,
-          type: item.type,
-          value: item.value,
-          linkUrl: null,
-          showOnProductPage: item.showOnProductPage,
-          sortOrder: index,
-        })),
-      })
-      toast.success("Product saved.")
-      setProductForm(null)
-    } catch (error) {
-      toast.error(getErrorMessage(error))
-    }
-  }
+  const handleToggleCategoryVisibility = useCallback(
+    async (category: AdminCategory) => {
+      const isActive = !(category.isActive ?? true)
 
-  async function handleReorderCategories(
-    orderedCategoryIds: Array<CategoryId>
-  ) {
-    try {
-      await reorderCategories({
-        parentId,
-        orderedCategoryIds,
-      })
-      toast.success("Category order saved.")
-    } catch (error) {
-      toast.error(getErrorMessage(error))
-    }
-  }
+      try {
+        await setCategoryVisibility({
+          categoryId: category._id,
+          isActive,
+        })
+        toast.success(isActive ? "Category visible." : "Category hidden.")
+      } catch (error) {
+        toast.error(getErrorMessage(error))
+      }
+    },
+    [setCategoryVisibility]
+  )
 
-  async function handleReorderProducts(
-    productCategoryId: CategoryId,
-    orderedProductIds: Array<ProductId>
-  ) {
-    try {
-      await reorderProducts({
-        categoryId: productCategoryId,
-        orderedProductIds,
-      })
-      toast.success("Product order saved.")
-    } catch (error) {
-      toast.error(getErrorMessage(error))
-    }
-  }
+  const handleToggleProductVisibility = useCallback(
+    async (product: AdminProductRecord["product"]) => {
+      const status = product.status === "published" ? "draft" : "published"
 
-  async function handleToggleCategoryVisibility(category: AdminCategory) {
-    const isActive = !(category.isActive ?? true)
+      try {
+        await setProductVisibility({
+          productId: product._id,
+          status,
+        })
+        toast.success(
+          status === "published" ? "Product published." : "Product hidden."
+        )
+      } catch (error) {
+        toast.error(getErrorMessage(error))
+      }
+    },
+    [setProductVisibility]
+  )
 
-    try {
-      await setCategoryVisibility({
-        categoryId: category._id,
-        isActive,
-      })
-      toast.success(isActive ? "Category visible." : "Category hidden.")
-    } catch (error) {
-      toast.error(getErrorMessage(error))
-    }
-  }
-
-  async function handleToggleProductVisibility(
-    product: AdminProductRecord["product"]
-  ) {
-    const status = product.status === "published" ? "draft" : "published"
-
-    try {
-      await setProductVisibility({
-        productId: product._id,
-        status,
-      })
-      toast.success(
-        status === "published" ? "Product published." : "Product hidden."
-      )
-    } catch (error) {
-      toast.error(getErrorMessage(error))
-    }
-  }
-
-  async function handleConfirmDelete() {
+  const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) {
       return
     }
@@ -1004,55 +1042,157 @@ function useAdminCatalogWorkspaceElement({
     } finally {
       setIsDeleting(false)
     }
-  }
+  }, [
+    currentCategory?._id,
+    deleteCategory,
+    deleteProduct,
+    deleteTarget,
+    setDeleteTarget,
+    setIsDeleting,
+  ])
 
-  async function handleUploadImages(files: Array<File>) {
-    if (!productForm) {
-      return
-    }
-
-    setIsUploading(true)
-
-    try {
-      assertProductImageCapacity(productForm.images.length, files.length)
-      for (const file of files) {
-        assertProductImageFile(file)
+  const handleUploadImages = useCallback(
+    async (files: Array<File>) => {
+      if (!productForm) {
+        return
       }
 
-      const uploadSignature = await createCloudinaryUploadSignature({
-        productId: productForm.productId,
-        productAssetFolder: nullableText(productForm.cloudinaryAssetFolder),
-      })
+      setIsUploading(true)
 
-      const uploadedImages = await Promise.all(
-        files.map(async (file) => {
-          const uploadFile = await prepareProductImageForUpload(file)
+      try {
+        assertProductImageCapacity(productForm.images.length, files.length)
+        for (const file of files) {
+          assertProductImageFile(file)
+        }
 
-          return uploadProductImageToCloudinary(uploadFile, uploadSignature)
+        const uploadSignature = await createCloudinaryUploadSignature({
+          productId: productForm.productId,
+          productAssetFolder: nullableText(productForm.cloudinaryAssetFolder),
         })
-      )
 
-      setProductForm((current) =>
-        current
-          ? {
-              ...current,
-              images: [...current.images, ...uploadedImages],
-              cloudinaryAssetFolder: uploadSignature.assetFolder,
-            }
-          : current
-      )
-      toast.success(
-        uploadedImages.length === 1
-          ? "Image uploaded to Cloudinary."
-          : `${uploadedImages.length} images uploaded to Cloudinary.`
-      )
-    } catch (error) {
-      toast.error(getErrorMessage(error))
-    } finally {
-      setIsUploading(false)
+        const uploadedImages = await Promise.all(
+          files.map(async (file) => {
+            const uploadFile = await prepareProductImageForUpload(file)
+
+            return uploadProductImageToCloudinary(uploadFile, uploadSignature)
+          })
+        )
+
+        setProductForm((current) =>
+          current
+            ? {
+                ...current,
+                images: [...current.images, ...uploadedImages],
+                cloudinaryAssetFolder: uploadSignature.assetFolder,
+              }
+            : current
+        )
+        toast.success(
+          uploadedImages.length === 1
+            ? "Image uploaded to Cloudinary."
+            : `${uploadedImages.length} images uploaded to Cloudinary.`
+        )
+      } catch (error) {
+        toast.error(getErrorMessage(error))
+      } finally {
+        setIsUploading(false)
+      }
+    },
+    [
+      createCloudinaryUploadSignature,
+      productForm,
+      setIsUploading,
+      setProductForm,
+    ]
+  )
+
+  const handleAddCategory = useCallback(() => {
+    setCategoryForm(emptyCategoryForm(parentId, childCategories.length))
+  }, [childCategories.length, parentId, setCategoryForm])
+  const handleAddProduct = useCallback(() => {
+    setProductForm(
+      emptyProductForm(parentId, templates, directProductRecords.length)
+    )
+  }, [directProductRecords.length, parentId, setProductForm, templates])
+  const handleEditCategory = useCallback(
+    (category: AdminCategory) => {
+      setCategoryForm({
+        categoryId: category._id,
+        name: category.name,
+        parentId: category.parentId,
+        sortOrder: String(category.sortOrder),
+        isActive: category.isActive ?? true,
+      })
+    },
+    [setCategoryForm]
+  )
+  const handleDeleteCategory = useCallback(
+    (category: AdminCategory) => {
+      setDeleteTarget({ type: "category", category })
+    },
+    [setDeleteTarget]
+  )
+  const handleToggleCategory = useCallback(
+    (category: AdminCategory) => {
+      void handleToggleCategoryVisibility(category)
+    },
+    [handleToggleCategoryVisibility]
+  )
+  const handleEditProduct = useCallback(
+    (product: AdminProductRecord["product"]) => {
+      const record = productRecordsById.get(product._id)
+      if (record) {
+        setProductForm(productRecordToForm(record))
+      }
+    },
+    [productRecordsById, setProductForm]
+  )
+  const handleDeleteProduct = useCallback(
+    (product: AdminProductRecord["product"]) => {
+      setDeleteTarget({ type: "product", product })
+    },
+    [setDeleteTarget]
+  )
+  const handleToggleProduct = useCallback(
+    (product: AdminProductRecord["product"]) => {
+      void handleToggleProductVisibility(product)
+    },
+    [handleToggleProductVisibility]
+  )
+  const handleReorderCategoriesClick = useCallback(
+    (orderedCategoryIds: Array<CategoryId>) => {
+      void handleReorderCategories(orderedCategoryIds)
+    },
+    [handleReorderCategories]
+  )
+  const handleReorderProductsClick = useCallback(
+    (productCategoryId: CategoryId, orderedProductIds: Array<ProductId>) => {
+      void handleReorderProducts(productCategoryId, orderedProductIds)
+    },
+    [handleReorderProducts]
+  )
+  const handleCancelDelete = useCallback(() => {
+    setDeleteTarget(null)
+  }, [setDeleteTarget])
+  const handleConfirmDeleteClick = useCallback(() => {
+    void handleConfirmDelete()
+  }, [handleConfirmDelete])
+
+  if (data === undefined) {
+    if (showBackendSetupState) {
+      return <BackendSetupState />
     }
+
+    return (
+      <main className="min-h-svh bg-muted p-6">
+        <div className="mx-auto h-[42rem] max-w-7xl animate-pulse rounded-lg bg-background" />
+      </main>
+    )
   }
 
+  if (categoryPath && !currentCategory) {
+    return <AdminCategoryUnavailable categories={categories} />
+  }
   return (
     <>
       <ShopStorefront
@@ -1060,50 +1200,19 @@ function useAdminCatalogWorkspaceElement({
         categories={categories}
         currentCategory={currentCategory}
         childCategories={childCategories}
-        products={pageProductRecords.map((record) => record.product)}
+        products={pageProducts}
         title={currentCategory?.name}
         canAddProduct={canAddProduct}
-        onAddCategory={() =>
-          setCategoryForm(emptyCategoryForm(parentId, childCategories.length))
-        }
-        onAddProduct={() =>
-          setProductForm(
-            emptyProductForm(parentId, templates, directProductRecords.length)
-          )
-        }
-        onEditCategory={(category) =>
-          setCategoryForm({
-            categoryId: category._id,
-            name: category.name,
-            parentId: category.parentId,
-            sortOrder: String(category.sortOrder),
-            isActive: category.isActive ?? true,
-          })
-        }
-        onDeleteCategory={(category) => {
-          setDeleteTarget({ type: "category", category })
-        }}
-        onToggleCategoryVisibility={(category) => {
-          void handleToggleCategoryVisibility(category)
-        }}
-        onEditProduct={(product) => {
-          const record = productRecordsById.get(product._id)
-          if (record) {
-            setProductForm(productRecordToForm(record))
-          }
-        }}
-        onDeleteProduct={(product) => {
-          setDeleteTarget({ type: "product", product })
-        }}
-        onToggleProductVisibility={(product) => {
-          void handleToggleProductVisibility(product)
-        }}
-        onReorderCategories={(orderedCategoryIds) => {
-          void handleReorderCategories(orderedCategoryIds)
-        }}
-        onReorderProducts={(productCategoryId, orderedProductIds) => {
-          void handleReorderProducts(productCategoryId, orderedProductIds)
-        }}
+        onAddCategory={handleAddCategory}
+        onAddProduct={handleAddProduct}
+        onEditCategory={handleEditCategory}
+        onDeleteCategory={handleDeleteCategory}
+        onToggleCategoryVisibility={handleToggleCategory}
+        onEditProduct={handleEditProduct}
+        onDeleteProduct={handleDeleteProduct}
+        onToggleProductVisibility={handleToggleProduct}
+        onReorderCategories={handleReorderCategoriesClick}
+        onReorderProducts={handleReorderProductsClick}
       />
 
       <CategoryDialog
@@ -1123,10 +1232,8 @@ function useAdminCatalogWorkspaceElement({
       <DeleteConfirmationDialog
         target={deleteTarget}
         isDeleting={isDeleting}
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          void handleConfirmDelete()
-        }}
+        onCancel={handleCancelDelete}
+        onConfirm={handleConfirmDeleteClick}
       />
     </>
   )
@@ -1155,8 +1262,8 @@ export function AdminProductEditorDialog({
     })
   const [isUploading, setIsUploading] = useState(false)
 
-  const categories = data?.categories ?? []
-  const templates = data?.optionTemplates ?? []
+  const categories = data?.categories ?? EMPTY_ADMIN_CATEGORIES
+  const templates = data?.optionTemplates ?? EMPTY_OPTION_TEMPLATES
   const productRecords = data?.products ?? EMPTY_PRODUCT_RECORDS
   const productRecord =
     productRecords.find((record) => record.product._id === productId) ?? null
@@ -1164,16 +1271,21 @@ export function AdminProductEditorDialog({
     categories.find(
       (category) => category._id === productRecord?.product.categoryId
     ) ?? null
-  const childCategories = currentCategory
-    ? sortBySortOrder(
-        categories.filter(
-          (category) => category.parentId === currentCategory._id
-        )
-      )
-    : []
-  const productAssignableCategories = currentCategory
-    ? [currentCategory, ...childCategories]
-    : []
+  const childCategories = useMemo(
+    () =>
+      currentCategory
+        ? sortBySortOrder(
+            categories.filter(
+              (category) => category.parentId === currentCategory._id
+            )
+          )
+        : EMPTY_ADMIN_CATEGORIES,
+    [categories, currentCategory]
+  )
+  const productAssignableCategories = useMemo(
+    () => (currentCategory ? [currentCategory, ...childCategories] : []),
+    [childCategories, currentCategory]
+  )
   const sourceProductId =
     isOpen && productRecord ? productRecord.product._id : null
   let productForm = productEditorForm.form
@@ -1189,124 +1301,140 @@ export function AdminProductEditorDialog({
     })
   }
 
-  function handleChangeProductForm(
-    value: React.SetStateAction<ProductFormState | null>
-  ) {
-    setProductEditorForm((current) => {
-      const nextValue =
-        typeof value === "function" ? value(current.form) : value
+  const handleChangeProductForm = useCallback(
+    (value: React.SetStateAction<ProductFormState | null>) => {
+      setProductEditorForm((current) => {
+        const nextValue =
+          typeof value === "function" ? value(current.form) : value
 
-      if (nextValue === null) {
-        onOpenChange(false)
+        if (nextValue === null) {
+          onOpenChange(false)
+        }
+
+        return {
+          sourceProductId: current.sourceProductId,
+          form: nextValue,
+        }
+      })
+    },
+    [onOpenChange]
+  )
+
+  const handleSaveProduct = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      if (!productForm?.categoryId) {
+        toast.error("Select a category before saving the product.")
+        return
       }
 
-      return {
-        sourceProductId: current.sourceProductId,
-        form: nextValue,
-      }
-    })
-  }
+      try {
+        const productSortFallback = productRecords.filter(
+          (record) => record.product.categoryId === productForm.categoryId
+        ).length
 
-  async function handleSaveProduct(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!productForm?.categoryId) {
-      toast.error("Select a category before saving the product.")
-      return
-    }
-
-    try {
-      const productSortFallback = productRecords.filter(
-        (record) => record.product.categoryId === productForm.categoryId
-      ).length
-
-      await upsertProduct({
-        productId: productForm.productId,
-        categoryId: productForm.categoryId,
-        name: productForm.name,
-        description: productForm.description,
-        basePriceCents: priceInputToCents(productForm.basePrice),
-        currency: BASE_CURRENCY,
-        status: productForm.status,
-        sku: nullableText(productForm.sku),
-        cloudinaryAssetFolder: nullableText(productForm.cloudinaryAssetFolder),
-        sortOrder: parseSortOrder(productForm.sortOrder, productSortFallback),
-        images: productForm.images.map((image, index) => ({
-          imageId: image.imageId,
-          imageUrl: image.imageUrl,
-          cloudinaryPublicId: nullableText(image.cloudinaryPublicId),
-          cloudinaryAssetFolder: nullableText(image.cloudinaryAssetFolder),
-          sortOrder: index,
-        })),
-        options: buildOptionsFromTemplates(productForm, templates),
-        metadata: productForm.metadata.map((item, index) => ({
-          metadataId: item.metadataId,
-          label: item.label,
-          type: item.type,
-          value: item.value,
-          linkUrl: null,
-          showOnProductPage: item.showOnProductPage,
-          sortOrder: index,
-        })),
-      })
-      toast.success("Product saved.")
-      setProductEditorForm({
-        sourceProductId: null,
-        form: null,
-      })
-      onOpenChange(false)
-      onSaved?.(slugify(productForm.name))
-    } catch (error) {
-      toast.error(getErrorMessage(error))
-    }
-  }
-
-  async function handleUploadImages(files: Array<File>) {
-    if (!productForm) {
-      return
-    }
-
-    setIsUploading(true)
-
-    try {
-      assertProductImageCapacity(productForm.images.length, files.length)
-      for (const file of files) {
-        assertProductImageFile(file)
-      }
-
-      const uploadSignature = await createCloudinaryUploadSignature({
-        productId: productForm.productId,
-        productAssetFolder: nullableText(productForm.cloudinaryAssetFolder),
-      })
-
-      const uploadedImages = await Promise.all(
-        files.map(async (file) => {
-          const uploadFile = await prepareProductImageForUpload(file)
-
-          return uploadProductImageToCloudinary(uploadFile, uploadSignature)
+        await upsertProduct({
+          productId: productForm.productId,
+          categoryId: productForm.categoryId,
+          name: productForm.name,
+          description: productForm.description,
+          basePriceCents: priceInputToCents(productForm.basePrice),
+          currency: BASE_CURRENCY,
+          status: productForm.status,
+          sku: nullableText(productForm.sku),
+          cloudinaryAssetFolder: nullableText(
+            productForm.cloudinaryAssetFolder
+          ),
+          sortOrder: parseSortOrder(productForm.sortOrder, productSortFallback),
+          images: productForm.images.map((image, index) => ({
+            imageId: image.imageId,
+            imageUrl: image.imageUrl,
+            cloudinaryPublicId: nullableText(image.cloudinaryPublicId),
+            cloudinaryAssetFolder: nullableText(image.cloudinaryAssetFolder),
+            sortOrder: index,
+          })),
+          options: buildOptionsFromTemplates(productForm, templates),
+          metadata: productForm.metadata.map((item, index) => ({
+            metadataId: item.metadataId,
+            label: item.label,
+            type: item.type,
+            value: item.value,
+            linkUrl: null,
+            showOnProductPage: item.showOnProductPage,
+            sortOrder: index,
+          })),
         })
-      )
+        toast.success("Product saved.")
+        setProductEditorForm({
+          sourceProductId: null,
+          form: null,
+        })
+        onOpenChange(false)
+        onSaved?.(slugify(productForm.name))
+      } catch (error) {
+        toast.error(getErrorMessage(error))
+      }
+    },
+    [
+      onOpenChange,
+      onSaved,
+      productForm,
+      productRecords,
+      templates,
+      upsertProduct,
+    ]
+  )
 
-      setProductEditorForm((current) => ({
-        sourceProductId: current.sourceProductId,
-        form: current.form
-          ? {
-              ...current.form,
-              images: [...current.form.images, ...uploadedImages],
-              cloudinaryAssetFolder: uploadSignature.assetFolder,
-            }
-          : current.form,
-      }))
-      toast.success(
-        uploadedImages.length === 1
-          ? "Image uploaded to Cloudinary."
-          : `${uploadedImages.length} images uploaded to Cloudinary.`
-      )
-    } catch (error) {
-      toast.error(getErrorMessage(error))
-    } finally {
-      setIsUploading(false)
-    }
-  }
+  const handleUploadImages = useCallback(
+    async (files: Array<File>) => {
+      if (!productForm) {
+        return
+      }
+
+      setIsUploading(true)
+
+      try {
+        assertProductImageCapacity(productForm.images.length, files.length)
+        for (const file of files) {
+          assertProductImageFile(file)
+        }
+
+        const uploadSignature = await createCloudinaryUploadSignature({
+          productId: productForm.productId,
+          productAssetFolder: nullableText(productForm.cloudinaryAssetFolder),
+        })
+
+        const uploadedImages = await Promise.all(
+          files.map(async (file) => {
+            const uploadFile = await prepareProductImageForUpload(file)
+
+            return uploadProductImageToCloudinary(uploadFile, uploadSignature)
+          })
+        )
+
+        setProductEditorForm((current) => ({
+          sourceProductId: current.sourceProductId,
+          form: current.form
+            ? {
+                ...current.form,
+                images: [...current.form.images, ...uploadedImages],
+                cloudinaryAssetFolder: uploadSignature.assetFolder,
+              }
+            : current.form,
+        }))
+        toast.success(
+          uploadedImages.length === 1
+            ? "Image uploaded to Cloudinary."
+            : `${uploadedImages.length} images uploaded to Cloudinary.`
+        )
+      } catch (error) {
+        toast.error(getErrorMessage(error))
+      } finally {
+        setIsUploading(false)
+      }
+    },
+    [createCloudinaryUploadSignature, productForm]
+  )
 
   return (
     <ProductDialog
@@ -1343,12 +1471,17 @@ function DeleteConfirmationDialog({
     target?.type === "category"
       ? target.category.name
       : (target?.product.name ?? "")
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && !isDeleting) {
+        onCancel()
+      }
+    },
+    [isDeleting, onCancel]
+  )
 
   return (
-    <AlertDialog
-      open={target !== null}
-      onOpenChange={(open) => !open && !isDeleting && onCancel()}
-    >
+    <AlertDialog open={target !== null} onOpenChange={handleOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
@@ -1405,8 +1538,8 @@ function AdminCategoryUnavailable({
     <ShopStorefront
       mode="admin"
       categories={categories}
-      childCategories={[]}
-      products={[]}
+      childCategories={EMPTY_ADMIN_CATEGORIES}
+      products={EMPTY_ADMIN_PRODUCTS}
       title="Category unavailable"
       subtitle="This admin folder does not exist anymore."
     />
@@ -1414,6 +1547,10 @@ function AdminCategoryUnavailable({
 }
 
 function BackendSetupState() {
+  const handleRetry = useCallback(() => {
+    window.location.reload()
+  }, [])
+
   return (
     <main className="flex min-h-svh items-center justify-center bg-muted p-6">
       <section className="w-full max-w-xl rounded-lg border bg-background p-6">
@@ -1433,7 +1570,7 @@ function BackendSetupState() {
           URL.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
-          <Button type="button" onClick={() => window.location.reload()}>
+          <Button type="button" onClick={handleRetry}>
             Retry
           </Button>
           <Link
@@ -1457,11 +1594,31 @@ function CategoryDialog({
   onChange: React.Dispatch<React.SetStateAction<CategoryFormState | null>>
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>
 }) {
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        onChange(null)
+      }
+    },
+    [onChange]
+  )
+  const handleSubmit = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      void onSubmit(event)
+    },
+    [onSubmit]
+  )
+  const handleNameChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      onChange((current) =>
+        current ? { ...current, name: event.target.value } : current
+      )
+    },
+    [onChange]
+  )
+
   return (
-    <Dialog
-      open={form !== null}
-      onOpenChange={(open) => !open && onChange(null)}
-    >
+    <Dialog open={form !== null} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
@@ -1472,20 +1629,13 @@ function CategoryDialog({
           </DialogDescription>
         </DialogHeader>
         {form && (
-          <form
-            className="space-y-4"
-            onSubmit={(event) => void onSubmit(event)}
-          >
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <Label htmlFor="category-name">Category name</Label>
               <Input
                 id="category-name"
                 value={form.name}
-                onChange={(event) =>
-                  onChange((current) =>
-                    current ? { ...current, name: event.target.value } : current
-                  )
-                }
+                onChange={handleNameChange}
                 placeholder="Ligue 1"
               />
             </div>
@@ -1519,11 +1669,29 @@ function ProductDialog({
   onUploadImages: (files: Array<File>) => Promise<void>
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>
 }) {
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        onChange(null)
+      }
+    },
+    [onChange]
+  )
+  const handleSubmit = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      void onSubmit(event)
+    },
+    [onSubmit]
+  )
+  const handleMetadataChange = useCallback(
+    (metadata: Array<ProductMetadataFormState>) => {
+      onChange((current) => (current ? { ...current, metadata } : current))
+    },
+    [onChange]
+  )
+
   return (
-    <Dialog
-      open={form !== null}
-      onOpenChange={(open) => !open && onChange(null)}
-    >
+    <Dialog open={form !== null} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>
@@ -1531,10 +1699,7 @@ function ProductDialog({
           </DialogTitle>
         </DialogHeader>
         {form && (
-          <form
-            className="space-y-6"
-            onSubmit={(event) => void onSubmit(event)}
-          >
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <ProductBasicsForm
               form={form}
               assignableCategories={assignableCategories}
@@ -1553,11 +1718,7 @@ function ProductDialog({
             />
             <ProductMetadataForm
               metadata={form.metadata}
-              onChange={(metadata) =>
-                onChange((current) =>
-                  current ? { ...current, metadata } : current
-                )
-              }
+              onChange={handleMetadataChange}
             />
             <DialogFooter>
               <Button type="submit" size="lg">
@@ -1583,6 +1744,38 @@ function ProductBasicsForm({
 }) {
   const currentCategory = assignableCategories[0]
   const subCategories = assignableCategories.slice(1)
+  const handleNameChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      onChange((current) =>
+        current ? { ...current, name: event.target.value } : current
+      )
+    },
+    [onChange]
+  )
+  const handleCategoryChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      const selectedCategoryId = event.target.value
+
+      onChange((current) => {
+        const nextCategory = assignableCategories.find(
+          (category) => category._id === selectedCategoryId
+        )
+
+        return current && nextCategory
+          ? { ...current, categoryId: nextCategory._id }
+          : current
+      })
+    },
+    [assignableCategories, onChange]
+  )
+  const handleBasePriceChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      onChange((current) =>
+        current ? { ...current, basePrice: event.target.value } : current
+      )
+    },
+    [onChange]
+  )
 
   return (
     <section className="grid gap-4 lg:grid-cols-2">
@@ -1591,11 +1784,7 @@ function ProductBasicsForm({
         <Input
           id="product-name"
           value={form.name}
-          onChange={(event) =>
-            onChange((current) =>
-              current ? { ...current, name: event.target.value } : current
-            )
-          }
+          onChange={handleNameChange}
           placeholder="PSG home jersey 2026"
         />
       </div>
@@ -1604,20 +1793,9 @@ function ProductBasicsForm({
           <Label htmlFor="product-category">Placement</Label>
           <select
             id="product-category"
+            aria-label="Product placement"
             value={form.categoryId ?? ""}
-            onChange={(event) => {
-              const selectedCategoryId = event.target.value
-
-              onChange((current) => {
-                const nextCategory = assignableCategories.find(
-                  (category) => category._id === selectedCategoryId
-                )
-
-                return current && nextCategory
-                  ? { ...current, categoryId: nextCategory._id }
-                  : current
-              })
-            }}
+            onChange={handleCategoryChange}
             className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <option value="" disabled>
@@ -1645,11 +1823,7 @@ function ProductBasicsForm({
         <Input
           id="product-price"
           value={form.basePrice}
-          onChange={(event) =>
-            onChange((current) =>
-              current ? { ...current, basePrice: event.target.value } : current
-            )
-          }
+          onChange={handleBasePriceChange}
         />
         <p className="text-xs text-muted-foreground">
           Product prices are entered in EUR. Checkout uses the selected customer
@@ -1672,6 +1846,16 @@ function CloudinaryImageForm({
   onUploadImages: (files: Array<File>) => Promise<void>
 }) {
   const draggedImageLocalIdRef = useRef<string | null>(null)
+  const handleFileChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? [])
+      if (files.length > 0) {
+        void onUploadImages(files)
+      }
+      event.target.value = ""
+    },
+    [onUploadImages]
+  )
 
   return (
     <section className="rounded-lg border p-4">
@@ -1689,13 +1873,7 @@ function CloudinaryImageForm({
             className="sr-only"
             disabled={isUploading}
             multiple
-            onChange={(event) => {
-              const files = Array.from(event.target.files ?? [])
-              if (files.length > 0) {
-                void onUploadImages(files)
-              }
-              event.target.value = ""
-            }}
+            onChange={handleFileChange}
           />
         </label>
       </div>
@@ -1706,110 +1884,15 @@ function CloudinaryImageForm({
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {form.images.map((image, index) => (
-            <div
+            <ProductImageTile
               key={image.localId}
-              draggable={!isUploading}
-              onDragStart={() => {
-                draggedImageLocalIdRef.current = image.localId
-              }}
-              onDragEnd={() => {
-                draggedImageLocalIdRef.current = null
-              }}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={() => {
-                const draggedImageLocalId = draggedImageLocalIdRef.current
-                if (!draggedImageLocalId) {
-                  return
-                }
-
-                onChange((current) =>
-                  current
-                    ? {
-                        ...current,
-                        images: moveProductImageBefore(
-                          current.images,
-                          draggedImageLocalId,
-                          image.localId
-                        ),
-                      }
-                    : current
-                )
-                draggedImageLocalIdRef.current = null
-              }}
-              className="group rounded-lg border bg-background p-2"
-            >
-              <div className="relative aspect-square overflow-hidden rounded-md bg-muted">
-                <img
-                  src={image.imageUrl}
-                  alt=""
-                  className="size-full object-cover"
-                />
-                {index === 0 && (
-                  <Badge className="absolute top-2 left-2 shadow-sm">
-                    Primary
-                  </Badge>
-                )}
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <GripVerticalIcon className="size-3.5 shrink-0" />
-                  <span>{index + 1}</span>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <ProductImageOrderButton
-                    direction="up"
-                    disabled={index === 0}
-                    onClick={() =>
-                      onChange((current) =>
-                        current
-                          ? {
-                              ...current,
-                              images: moveProductImageByOffset(
-                                current.images,
-                                index,
-                                -1
-                              ),
-                            }
-                          : current
-                      )
-                    }
-                  />
-                  <ProductImageOrderButton
-                    direction="down"
-                    disabled={index === form.images.length - 1}
-                    onClick={() =>
-                      onChange((current) =>
-                        current
-                          ? {
-                              ...current,
-                              images: moveProductImageByOffset(
-                                current.images,
-                                index,
-                                1
-                              ),
-                            }
-                          : current
-                      )
-                    }
-                  />
-                  <ProductImageRemoveButton
-                    onClick={() =>
-                      onChange((current) =>
-                        current
-                          ? {
-                              ...current,
-                              images: current.images.filter(
-                                (currentImage) =>
-                                  currentImage.localId !== image.localId
-                              ),
-                            }
-                          : current
-                      )
-                    }
-                  />
-                </div>
-              </div>
-            </div>
+              image={image}
+              index={index}
+              imageCount={form.images.length}
+              isUploading={isUploading}
+              draggedImageLocalIdRef={draggedImageLocalIdRef}
+              onChange={onChange}
+            />
           ))}
         </div>
       )}
@@ -1847,6 +1930,122 @@ function ProductImageOrderButton({
   )
 }
 
+function ProductImageTile({
+  image,
+  index,
+  imageCount,
+  isUploading,
+  draggedImageLocalIdRef,
+  onChange,
+}: {
+  image: ProductImageFormState
+  index: number
+  imageCount: number
+  isUploading: boolean
+  draggedImageLocalIdRef: React.MutableRefObject<string | null>
+  onChange: React.Dispatch<React.SetStateAction<ProductFormState | null>>
+}) {
+  const handleDragStart = useCallback(() => {
+    draggedImageLocalIdRef.current = image.localId
+  }, [draggedImageLocalIdRef, image.localId])
+  const handleDragEnd = useCallback(() => {
+    draggedImageLocalIdRef.current = null
+  }, [draggedImageLocalIdRef])
+  const handleDragOver = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault()
+    },
+    []
+  )
+  const handleDrop = useCallback(() => {
+    const draggedImageLocalId = draggedImageLocalIdRef.current
+    if (!draggedImageLocalId) return
+
+    onChange((current) =>
+      current
+        ? {
+            ...current,
+            images: moveProductImageBefore(
+              current.images,
+              draggedImageLocalId,
+              image.localId
+            ),
+          }
+        : current
+    )
+    draggedImageLocalIdRef.current = null
+  }, [draggedImageLocalIdRef, image.localId, onChange])
+  const handleMoveUp = useCallback(() => {
+    onChange((current) =>
+      current
+        ? {
+            ...current,
+            images: moveProductImageByOffset(current.images, index, -1),
+          }
+        : current
+    )
+  }, [index, onChange])
+  const handleMoveDown = useCallback(() => {
+    onChange((current) =>
+      current
+        ? {
+            ...current,
+            images: moveProductImageByOffset(current.images, index, 1),
+          }
+        : current
+    )
+  }, [index, onChange])
+  const handleRemove = useCallback(() => {
+    onChange((current) =>
+      current
+        ? {
+            ...current,
+            images: current.images.filter(
+              (currentImage) => currentImage.localId !== image.localId
+            ),
+          }
+        : current
+    )
+  }, [image.localId, onChange])
+
+  return (
+    <div
+      draggable={!isUploading}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      className="group rounded-lg border bg-background p-2"
+    >
+      <div className="relative aspect-square overflow-hidden rounded-md bg-muted">
+        <img src={image.imageUrl} alt="" className="size-full object-cover" />
+        {index === 0 && (
+          <Badge className="absolute top-2 left-2 shadow-sm">Primary</Badge>
+        )}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <GripVerticalIcon className="size-3.5 shrink-0" />
+          <span>{index + 1}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <ProductImageOrderButton
+            direction="up"
+            disabled={index === 0}
+            onClick={handleMoveUp}
+          />
+          <ProductImageOrderButton
+            direction="down"
+            disabled={index === imageCount - 1}
+            onClick={handleMoveDown}
+          />
+          <ProductImageRemoveButton onClick={handleRemove} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ProductImageRemoveButton({ onClick }: { onClick: () => void }) {
   return (
     <Button
@@ -1874,6 +2073,7 @@ function TemplateActivationForm({
   const activeTemplates = sortBySortOrder(
     templates.filter((template) => template.isActive)
   )
+  const activeTemplateIds = new Set(form.optionTemplateIds)
 
   return (
     <section className="rounded-lg border p-4">
@@ -1897,53 +2097,66 @@ function TemplateActivationForm({
         </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
-          {activeTemplates.map((template) => {
-            const checked = form.optionTemplateIds.includes(template._id)
-            const label = displayOptionLabel(template.label)
-
-            return (
-              <label
-                key={template._id}
-                className="flex items-start gap-3 rounded-lg border p-3 text-sm"
-              >
-                <input
-                  type="checkbox"
-                  aria-label={`Activate ${label}`}
-                  checked={checked}
-                  onChange={(event) =>
-                    onChange((current) => {
-                      if (!current) {
-                        return current
-                      }
-
-                      return {
-                        ...current,
-                        optionTemplateIds: event.target.checked
-                          ? [...current.optionTemplateIds, template._id]
-                          : current.optionTemplateIds.filter(
-                              (templateId) => templateId !== template._id
-                            ),
-                      }
-                    })
-                  }
-                  className="mt-1 size-4"
-                />
-                <span>
-                  <span className="block font-medium">{label}</span>
-                  <span className="mt-1 block text-muted-foreground">
-                    {template.config.type === "choice"
-                      ? template.config.choices
-                          .map((choice) => choice.label)
-                          .join(", ")
-                      : `${formatPrice(template.priceDeltaCents, BASE_CURRENCY)} extra`}
-                  </span>
-                </span>
-              </label>
-            )
-          })}
+          {activeTemplates.map((template) => (
+            <TemplateActivationItem
+              key={template._id}
+              template={template}
+              checked={activeTemplateIds.has(template._id)}
+              onChange={onChange}
+            />
+          ))}
         </div>
       )}
     </section>
+  )
+}
+
+function TemplateActivationItem({
+  template,
+  checked,
+  onChange,
+}: {
+  template: AdminOptionTemplate
+  checked: boolean
+  onChange: React.Dispatch<React.SetStateAction<ProductFormState | null>>
+}) {
+  const label = displayOptionLabel(template.label)
+  const description =
+    template.config.type === "choice"
+      ? template.config.choices.map((choice) => choice.label).join(", ")
+      : `${formatPrice(template.priceDeltaCents, BASE_CURRENCY)} extra`
+  const handleChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      onChange((current) => {
+        if (!current) return current
+
+        return {
+          ...current,
+          optionTemplateIds: event.target.checked
+            ? [...current.optionTemplateIds, template._id]
+            : current.optionTemplateIds.filter(
+                (templateId) => templateId !== template._id
+              ),
+        }
+      })
+    },
+    [onChange, template._id]
+  )
+
+  return (
+    <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+      <input
+        type="checkbox"
+        aria-label={`Activate ${label}`}
+        checked={checked}
+        onChange={handleChange}
+        className="mt-1 size-4"
+      />
+      <span>
+        <span className="block font-medium">{label}</span>
+        <span className="mt-1 block text-muted-foreground">{description}</span>
+      </span>
+    </label>
   )
 }
 
@@ -1954,6 +2167,20 @@ function ProductMetadataForm({
   metadata: Array<ProductMetadataFormState>
   onChange: (metadata: Array<ProductMetadataFormState>) => void
 }) {
+  const handleAdd = useCallback(() => {
+    onChange([
+      ...metadata,
+      {
+        localId: createLocalId("metadata"),
+        metadataId: null,
+        label: "",
+        type: "text",
+        value: "",
+        showOnProductPage: true,
+      },
+    ])
+  }, [metadata, onChange])
+
   return (
     <section className="rounded-lg border p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -1963,24 +2190,7 @@ function ProductMetadataForm({
             Flexible product facts and links shown on product pages.
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            onChange([
-              ...metadata,
-              {
-                localId: createLocalId("metadata"),
-                metadataId: null,
-                label: "",
-                type: "text",
-                value: "",
-                showOnProductPage: true,
-              },
-            ])
-          }
-        >
+        <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
           <PlusIcon />
           Add
         </Button>
@@ -1992,75 +2202,103 @@ function ProductMetadataForm({
           </div>
         ) : (
           metadata.map((item, index) => (
-            <div
+            <ProductMetadataRow
               key={item.localId}
-              className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)_auto_auto] lg:items-center"
-            >
-              <Input
-                aria-label="Metadata label"
-                value={item.label}
-                placeholder="Label"
-                onChange={(event) =>
-                  updateMetadata(metadata, onChange, index, {
-                    label: event.target.value,
-                  })
-                }
-              />
-              <select
-                aria-label="Metadata type"
-                value={item.type}
-                onChange={(event) => {
-                  updateMetadata(metadata, onChange, index, {
-                    type: metadataTypeFromValue(event.target.value),
-                  })
-                }}
-                className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <option value="text">Text</option>
-                <option value="number">Number</option>
-                <option value="boolean">Boolean</option>
-                <option value="link">Link</option>
-              </select>
-              <Input
-                aria-label="Metadata value"
-                type={item.type === "link" ? "url" : "text"}
-                value={item.value}
-                placeholder={item.type === "link" ? "https://..." : "Value"}
-                onChange={(event) =>
-                  updateMetadata(metadata, onChange, index, {
-                    value: event.target.value,
-                  })
-                }
-              />
-              <MetadataVisibilityButton
-                isVisible={item.showOnProductPage}
-                onClick={() =>
-                  updateMetadata(metadata, onChange, index, {
-                    showOnProductPage: !item.showOnProductPage,
-                  })
-                }
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                title="Remove metadata"
-                aria-label="Remove metadata"
-                onClick={() =>
-                  onChange(
-                    metadata.filter(
-                      (currentItem) => currentItem.localId !== item.localId
-                    )
-                  )
-                }
-              >
-                <Trash2Icon />
-              </Button>
-            </div>
+              item={item}
+              index={index}
+              metadata={metadata}
+              onChange={onChange}
+            />
           ))
         )}
       </div>
     </section>
+  )
+}
+
+function ProductMetadataRow({
+  item,
+  index,
+  metadata,
+  onChange,
+}: {
+  item: ProductMetadataFormState
+  index: number
+  metadata: Array<ProductMetadataFormState>
+  onChange: (metadata: Array<ProductMetadataFormState>) => void
+}) {
+  const handleLabelChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      updateMetadata(metadata, onChange, index, { label: event.target.value })
+    },
+    [index, metadata, onChange]
+  )
+  const handleTypeChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      updateMetadata(metadata, onChange, index, {
+        type: metadataTypeFromValue(event.target.value),
+      })
+    },
+    [index, metadata, onChange]
+  )
+  const handleValueChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      updateMetadata(metadata, onChange, index, { value: event.target.value })
+    },
+    [index, metadata, onChange]
+  )
+  const handleToggleVisibility = useCallback(() => {
+    updateMetadata(metadata, onChange, index, {
+      showOnProductPage: !item.showOnProductPage,
+    })
+  }, [index, item.showOnProductPage, metadata, onChange])
+  const handleRemove = useCallback(() => {
+    onChange(
+      metadata.filter((currentItem) => currentItem.localId !== item.localId)
+    )
+  }, [item.localId, metadata, onChange])
+
+  return (
+    <div className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)_auto_auto] lg:items-center">
+      <Input
+        aria-label="Metadata label"
+        value={item.label}
+        placeholder="Label"
+        onChange={handleLabelChange}
+      />
+      <select
+        aria-label="Metadata type"
+        value={item.type}
+        onChange={handleTypeChange}
+        className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        <option value="text">Text</option>
+        <option value="number">Number</option>
+        <option value="boolean">Boolean</option>
+        <option value="link">Link</option>
+      </select>
+      <Input
+        aria-label="Metadata value"
+        type={item.type === "link" ? "url" : "text"}
+        value={item.value}
+        placeholder={item.type === "link" ? "https://..." : "Value"}
+        onChange={handleValueChange}
+      />
+      <MetadataVisibilityButton
+        isVisible={item.showOnProductPage}
+        onClick={handleToggleVisibility}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        title="Remove metadata"
+        aria-label="Remove metadata"
+        onClick={handleRemove}
+      >
+        <Trash2Icon />
+      </Button>
+    </div>
   )
 }
 

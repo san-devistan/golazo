@@ -1,5 +1,3 @@
-/* eslint-disable complexity -- Pricing follows each persisted product option variant. */
-
 import type { Infer } from "convex/values"
 
 import type { Id } from "./_generated/dataModel.d.ts"
@@ -19,6 +17,23 @@ export type PricedCartProductSnapshot = {
   unitPriceCents: number
   currency: string
   configurationSummary: Array<CartConfigurationSummaryItem>
+}
+
+type PricedProductOption = {
+  label: string
+  isRequired: boolean
+  priceDeltaCents: number
+  config:
+    | {
+        type: "choice"
+        choices: Array<{
+          label: string
+          priceDeltaCents: number
+        }>
+      }
+    | {
+        type: "personalization"
+      }
 }
 
 function displayOptionLabel(label: string) {
@@ -64,6 +79,83 @@ function summaryByDisplayLabel(summary: Array<CartConfigurationSummaryItem>) {
   return byLabel
 }
 
+function assertKnownSummaryLabels({
+  normalizedSummary,
+  productName,
+  knownLabels,
+}: {
+  normalizedSummary: Array<CartConfigurationSummaryItem>
+  productName: string
+  knownLabels: Set<string>
+}) {
+  const hasUnknownLabel = normalizedSummary.some(
+    (item) => item.label && !knownLabels.has(summaryLabelKey(item.label))
+  )
+
+  if (hasUnknownLabel) {
+    throw new Error(`Review options for ${productName}.`)
+  }
+}
+
+function choiceOptionPriceDelta(
+  option: PricedProductOption,
+  config: Extract<PricedProductOption["config"], { type: "choice" }>,
+  summaryItem: CartConfigurationSummaryItem | undefined,
+  optionLabel: string
+) {
+  if (!summaryItem) {
+    if (option.isRequired) {
+      throw new Error(`Choose ${optionLabel}.`)
+    }
+
+    return 0
+  }
+
+  const selectedChoice = config.choices.find(
+    (choice) => choice.label.trim() === summaryItem.value
+  )
+
+  if (!selectedChoice) {
+    throw new Error(`Choose a valid ${optionLabel}.`)
+  }
+
+  return (
+    normalizePriceCents(optionLabel, option.priceDeltaCents) +
+    normalizePriceCents(selectedChoice.label, selectedChoice.priceDeltaCents)
+  )
+}
+
+function personalizationOptionPriceDelta(
+  option: PricedProductOption,
+  summaryItem: CartConfigurationSummaryItem | undefined,
+  optionLabel: string
+) {
+  if (option.isRequired && !summaryItem) {
+    throw new Error(`Enter ${optionLabel}.`)
+  }
+
+  return summaryItem || option.isRequired
+    ? normalizePriceCents(optionLabel, option.priceDeltaCents)
+    : 0
+}
+
+function optionPriceDelta(
+  option: PricedProductOption,
+  summaryItem: CartConfigurationSummaryItem | undefined,
+  optionLabel: string
+) {
+  if (option.config.type === "choice") {
+    return choiceOptionPriceDelta(
+      option,
+      option.config,
+      summaryItem,
+      optionLabel
+    )
+  }
+
+  return personalizationOptionPriceDelta(option, summaryItem, optionLabel)
+}
+
 export async function priceCartProductConfiguration(
   ctx: QueryCtx | MutationCtx,
   productId: Id<"products">,
@@ -94,49 +186,17 @@ export async function priceCartProductConfiguration(
   )
   let unitPriceCents = normalizePriceCents("Base price", product.basePriceCents)
 
-  for (const item of normalizedSummary) {
-    if (item.label && !knownLabels.has(summaryLabelKey(item.label))) {
-      throw new Error(`Review options for ${product.name}.`)
-    }
-  }
+  assertKnownSummaryLabels({
+    normalizedSummary,
+    productName: product.name,
+    knownLabels,
+  })
 
   for (const option of options) {
     const optionLabel = displayOptionLabel(option.label)
     const summaryItem = byLabel.get(summaryLabelKey(optionLabel))
 
-    if (option.config.type === "choice") {
-      if (!summaryItem) {
-        if (option.isRequired) {
-          throw new Error(`Choose ${optionLabel}.`)
-        }
-
-        continue
-      }
-
-      const selectedChoice = option.config.choices.find(
-        (choice) => choice.label.trim() === summaryItem.value
-      )
-
-      if (!selectedChoice) {
-        throw new Error(`Choose a valid ${optionLabel}.`)
-      }
-
-      unitPriceCents +=
-        normalizePriceCents(optionLabel, option.priceDeltaCents) +
-        normalizePriceCents(
-          selectedChoice.label,
-          selectedChoice.priceDeltaCents
-        )
-      continue
-    }
-
-    if (option.isRequired && !summaryItem) {
-      throw new Error(`Enter ${optionLabel}.`)
-    }
-
-    if (summaryItem || option.isRequired) {
-      unitPriceCents += normalizePriceCents(optionLabel, option.priceDeltaCents)
-    }
+    unitPriceCents += optionPriceDelta(option, summaryItem, optionLabel)
   }
 
   if (unitPriceCents < 0) {

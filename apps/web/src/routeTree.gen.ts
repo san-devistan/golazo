@@ -1,5 +1,3 @@
-/* eslint-disable */
-
 // @ts-nocheck
 
 // noinspection JSUnusedGlobalSymbols
@@ -9,6 +7,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SearchRouteImport } from './routes/search'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AccountRouteImport } from './routes/account'
@@ -28,6 +27,11 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AdminProductsSlugRouteImport } from './routes/admin.products.$slug'
 import { Route as AdminCategoriesCategoryIdRouteImport } from './routes/admin.categories.$categoryId'
 
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -127,6 +131,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/admin': typeof AdminRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/search': typeof SearchRoute
   '/admin/$': typeof AdminSplatRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/orders': typeof AdminOrdersRoute
@@ -146,6 +151,7 @@ export interface FileRoutesByTo {
   '/$': typeof SplatRoute
   '/account': typeof AccountRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/search': typeof SearchRoute
   '/admin/$': typeof AdminSplatRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/orders': typeof AdminOrdersRoute
@@ -167,6 +173,7 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/admin': typeof AdminRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/search': typeof SearchRoute
   '/admin/$': typeof AdminSplatRoute
   '/admin/emails': typeof AdminEmailsRoute
   '/admin/orders': typeof AdminOrdersRoute
@@ -189,6 +196,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/reset-password'
+    | '/search'
     | '/admin/$'
     | '/admin/emails'
     | '/admin/orders'
@@ -208,6 +216,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/account'
     | '/reset-password'
+    | '/search'
     | '/admin/$'
     | '/admin/emails'
     | '/admin/orders'
@@ -228,6 +237,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/reset-password'
+    | '/search'
     | '/admin/$'
     | '/admin/emails'
     | '/admin/orders'
@@ -249,6 +259,7 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
+  SearchRoute: typeof SearchRoute
   CategoriesCategoryIdRoute: typeof CategoriesCategoryIdRoute
   CheckoutSuccessRoute: typeof CheckoutSuccessRoute
   PagesPageIdRoute: typeof PagesPageIdRoute
@@ -259,6 +270,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -416,6 +434,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   AdminRoute: AdminRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
+  SearchRoute: SearchRoute,
   CategoriesCategoryIdRoute: CategoriesCategoryIdRoute,
   CheckoutSuccessRoute: CheckoutSuccessRoute,
   PagesPageIdRoute: PagesPageIdRoute,

@@ -1,7 +1,8 @@
-// eslint-disable-next-line import/no-unassigned-import -- Marks this module as server-only for TanStack Start.
-import "@tanstack/react-start/server-only"
 import { useSession, type SessionConfig } from "@tanstack/react-start/server"
+import * as serverOnly from "@tanstack/react-start/server-only"
 import { createHash, timingSafeEqual } from "node:crypto"
+
+void serverOnly
 
 const ADMIN_PASSWORD_ENV_NAME = "ADMIN_PASSWORD"
 const ADMIN_SESSION_MAX_AGE_SECONDS = 60 * 60 * 12

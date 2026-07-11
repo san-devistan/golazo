@@ -17,16 +17,16 @@ const MAX_FOOTER_CATEGORIES = 6
 
 const FOOTER_PROMISES = [
   {
-    label: "Secure checkout",
-    icon: ShieldCheckIcon,
-  },
-  {
-    label: "Tracked shipping",
+    label: "Free shipping worldwide",
     icon: TruckIcon,
   },
   {
-    label: "Easy returns",
+    label: "Satisfied or refunded",
     icon: RotateCcwIcon,
+  },
+  {
+    label: "Secure checkout",
+    icon: ShieldCheckIcon,
   },
 ] as const
 
@@ -42,27 +42,30 @@ export function ShopFooter({
   }, [categories])
 
   return (
-    <footer className="bg-[#111] text-white">
-      <div className="mx-auto grid max-w-[1536px] gap-10 px-4 py-10 sm:px-6 lg:px-10 lg:py-12">
-        <div className="grid gap-8 border-b border-white/15 pb-10 lg:grid-cols-[minmax(220px,1.2fr)_minmax(0,2fr)] lg:gap-12">
+    <footer className="border-t border-black/15 bg-white text-[#111]">
+      <div className="mx-auto max-w-[1536px] px-4 pt-12 pb-8 sm:px-6 lg:px-10">
+        <FooterPromises />
+
+        <div className="mt-12 grid gap-y-10 border-t border-black/15 pt-10 lg:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.65fr)] lg:gap-x-20 xl:grid-cols-[minmax(520px,0.85fr)_minmax(0,1.65fr)] xl:gap-x-24 2xl:grid-cols-[minmax(620px,0.85fr)_minmax(0,1.65fr)] 2xl:gap-x-32">
           <div className="grid content-start gap-4">
             <Link
               to="/"
               aria-label="Golazo home"
-              className="w-fit font-oswald text-5xl leading-none font-black tracking-tight uppercase"
+              className="w-fit font-oswald text-6xl leading-[0.85] font-black tracking-normal uppercase sm:text-7xl lg:text-[5rem]"
             >
               GOLAZO
             </Link>
-            <p className="max-w-sm text-sm leading-6 text-white/65">
-              Football kits, custom pieces, and match-day essentials with the
-              details customers need before checkout.
+            <p className="max-w-xl text-sm leading-6 text-black/55">
+              Football shirts for match days, collections, and everyday support.
+              Secure checkout, worldwide shipping, and clear policies on every
+              order.
             </p>
-            <FooterPromises />
           </div>
 
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-y-8 sm:grid-cols-2 sm:gap-x-10 lg:grid-cols-4 lg:gap-x-12 xl:gap-x-16">
             <FooterColumn title="Shop">
-              <FooterRouterLink to="/">All products</FooterRouterLink>
+              <FooterRouterLink to="/">Home</FooterRouterLink>
+              <FooterRouterLink to="/">All jerseys</FooterRouterLink>
               <FooterRouterLink to="/account">Account</FooterRouterLink>
               {primaryCategories.map((category) => (
                 <FooterRouterLink
@@ -83,13 +86,6 @@ export function ShopFooter({
             ))}
           </div>
         </div>
-
-        <div className="flex flex-col gap-3 text-xs text-white/55 sm:flex-row sm:items-center sm:justify-between">
-          <p>Golazo Kit Room</p>
-          <p className="font-oswald text-sm tracking-wide text-[#a7f432] uppercase">
-            Kit room open online
-          </p>
-        </div>
       </div>
     </footer>
   )
@@ -97,11 +93,11 @@ export function ShopFooter({
 
 function FooterPromises() {
   return (
-    <div className="grid gap-2 text-sm text-white/75 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+    <ul className="grid list-none gap-6 p-0 text-sm text-black/55 sm:grid-cols-3">
       {FOOTER_PROMISES.map((promise) => (
         <FooterPromiseItem key={promise.label} promise={promise} />
       ))}
-    </div>
+    </ul>
   )
 }
 
@@ -113,10 +109,10 @@ function FooterPromiseItem({
   const Icon = promise.icon
 
   return (
-    <div className="flex items-center gap-2">
-      <Icon className="size-4 text-[#a7f432]" />
+    <li className="grid justify-items-center gap-2 text-center leading-tight">
+      <Icon className="size-[22px] text-[#111]" />
       <span>{promise.label}</span>
-    </div>
+    </li>
   )
 }
 
@@ -128,8 +124,8 @@ function FooterColumn({
   children: ReactNode
 }) {
   return (
-    <nav aria-label={title} className="grid content-start gap-3">
-      <h2 className="font-oswald text-sm font-bold tracking-wide text-white uppercase">
+    <nav aria-label={title} className="grid w-full content-start gap-3">
+      <h2 className="font-oswald text-base leading-none font-black tracking-normal text-[#111] uppercase">
         {title}
       </h2>
       <div className="grid gap-2 text-sm">{children}</div>
@@ -160,7 +156,7 @@ function FooterRouterLink({
     <Link
       to={to}
       params={params}
-      className="group inline-flex w-fit items-center gap-1.5 text-white/70 transition hover:text-white focus-visible:ring-3 focus-visible:ring-[#a7f432]/60 focus-visible:outline-none"
+      className="group inline-flex w-fit items-center gap-1.5 whitespace-nowrap text-black/55 transition hover:text-[#111] focus-visible:ring-2 focus-visible:ring-[#111]/30 focus-visible:outline-none"
     >
       <span>{children}</span>
       <ArrowUpRightIcon className="size-3.5 opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100" />

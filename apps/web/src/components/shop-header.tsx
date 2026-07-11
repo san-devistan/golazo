@@ -2,12 +2,15 @@ import { CustomerActions } from "@/components/customer-actions"
 import { LocaleCurrencySwitcher } from "@/components/locale-currency-switcher"
 import { ShopHeaderMobileNavigation } from "@/components/shop-header-mobile-navigation"
 import { ShopHeaderNavigation } from "@/components/shop-header-navigation"
-import type {
-  ShopHeaderCategory,
-  ShopHeaderMode,
+import {
+  EMPTY_HEADER_PRODUCTS,
+  type ShopHeaderCategory,
+  type ShopHeaderMode,
+  type ShopHeaderProduct,
 } from "@/components/shop-header-navigation-data"
+import { ShopHeaderSearchDialog } from "@/components/shop-header-search-dialog"
 import { useTranslation } from "@/lib/preferences"
-import { Link } from "@tanstack/react-router"
+import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import { Button } from "@workspace/ui/components/button"
 import {
   Sheet,
@@ -15,45 +18,58 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@workspace/ui/components/sheet"
-import { MenuIcon, SearchIcon } from "lucide-react"
+import { MenuIcon } from "lucide-react"
 import { useCallback, useState } from "react"
 
-export type { ShopHeaderCategory } from "@/components/shop-header-navigation-data"
+export type {
+  ShopHeaderCategory,
+  ShopHeaderProduct,
+} from "@/components/shop-header-navigation-data"
 
 export function ShopHeader({
   categories,
   currentCategoryId,
   currentCategoryPath,
   adminMode = false,
+  products = EMPTY_HEADER_PRODUCTS,
 }: {
   categories: Array<ShopHeaderCategory>
   currentCategoryId?: string | null
   currentCategoryPath?: string | null
   adminMode?: boolean
+  products?: Array<ShopHeaderProduct>
 }) {
   const mode = adminMode ? "admin" : "public"
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[#d9d9d9] bg-white text-[#111]">
-      <div className="mx-auto flex max-w-[1536px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6 lg:flex-nowrap lg:px-10">
-        <ShopHeaderMobileMenu
-          categories={categories}
-          currentCategoryId={currentCategoryId}
-          currentCategoryPath={currentCategoryPath}
-          mode={mode}
-          open={isMobileMenuOpen}
-          onOpenChange={setIsMobileMenuOpen}
-        />
-        <ShopHeaderBrand adminMode={adminMode} />
-        <ShopHeaderNavigation
-          categories={categories}
-          currentCategoryId={currentCategoryId}
-          currentCategoryPath={currentCategoryPath}
-          mode={mode}
-          className="hidden lg:block"
-        />
-        <ShopHeaderActions />
+    <header className="sticky top-0 z-40 bg-white text-[#111]">
+      {!adminMode && (
+        <div className="bg-black px-4 py-2 text-center font-oswald text-sm leading-none font-bold tracking-normal text-white uppercase">
+          Free shipping worldwide
+        </div>
+      )}
+      <div className="border-b border-[#dfdfdf]">
+        <div className="relative mx-auto flex min-h-[68px] max-w-[1536px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6 lg:flex-nowrap lg:px-10">
+          <ShopHeaderMobileMenu
+            categories={categories}
+            currentCategoryId={currentCategoryId}
+            currentCategoryPath={currentCategoryPath}
+            mode={mode}
+            open={isMobileMenuOpen}
+            onOpenChange={setIsMobileMenuOpen}
+          />
+          <ShopHeaderBrand adminMode={adminMode} />
+          <ShopHeaderNavigation
+            categories={categories}
+            currentCategoryId={currentCategoryId}
+            currentCategoryPath={currentCategoryPath}
+            mode={mode}
+            products={products}
+            className="pointer-events-none absolute inset-x-0 hidden justify-center lg:flex"
+          />
+          <ShopHeaderActions products={products} />
+        </div>
       </div>
     </header>
   )
@@ -64,30 +80,55 @@ function ShopHeaderBrand({ adminMode }: { adminMode: boolean }) {
     <Link
       to={adminMode ? "/admin" : "/"}
       aria-label="Golazo"
-      className="flex min-w-0 items-center font-oswald text-4xl leading-none font-black tracking-tight whitespace-nowrap text-[#111] uppercase"
+      className="flex min-w-0 items-center font-oswald text-[2rem] leading-none font-black tracking-normal whitespace-nowrap text-[#111] uppercase"
     >
       GOLAZO
     </Link>
   )
 }
 
-function ShopHeaderActions() {
+function ShopHeaderActions({
+  products,
+}: {
+  products: Array<ShopHeaderProduct>
+}) {
   const t = useTranslation()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const routeSearchQuery = searchQueryFromLocationSearch(location.search)
+
+  const handleSearch = useCallback(
+    (query: string) => {
+      void navigate({
+        to: "/search",
+        search: query ? { q: query } : {},
+      })
+    },
+    [navigate]
+  )
 
   return (
-    <div className="ml-auto flex min-w-0 items-center gap-2">
-      <div className="hidden h-9 w-52 items-center bg-[#f1f1f1] px-3 lg:flex">
-        <input
-          aria-label={t("searchProducts")}
-          placeholder={t("searchProducts")}
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-        />
-        <SearchIcon className="size-5" />
-      </div>
+    <div className="ml-auto flex min-w-0 items-center gap-1">
+      <ShopHeaderSearchDialog
+        initialQuery={routeSearchQuery}
+        label={t("searchProducts")}
+        products={products}
+        onSearch={handleSearch}
+      />
       <LocaleCurrencySwitcher />
       <CustomerActions />
     </div>
   )
+}
+
+function searchQueryFromLocationSearch(search: unknown) {
+  if (!search || typeof search !== "object") {
+    return ""
+  }
+
+  const query = Reflect.get(search, "q")
+
+  return typeof query === "string" ? query : ""
 }
 
 function ShopHeaderMobileMenu({

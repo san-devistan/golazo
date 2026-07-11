@@ -83,6 +83,7 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "short",
   timeStyle: "short",
   hourCycle: "h23",
+  timeZone: "UTC",
 })
 
 export function CustomerOrderSummary({
