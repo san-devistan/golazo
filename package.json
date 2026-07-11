@@ -4,20 +4,21 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --filter=web --filter=@workspace/backend",
     "fix": "bash scripts/fix.sh",
     "update:deps": "pnpm update -r",
     "update:skills": "npx --yes skills update --project --yes && pnpm -r --workspace-concurrency=1 exec npx --yes skills update --project --yes",
-    "sync:shadcn": "npx shadcn@latest diff -c packages/ui",
-    "sync:mobile-theme": "node scripts/sync-mobile-theme.mjs"
+    "sync:design-system": "node scripts/sync-design-system.mjs",
+    "sync:shadcn": "npx shadcn@latest diff -c packages/ui"
   },
   "devDependencies": {
     "oxc-parser": "^0.129.0",
-    "oxc-resolver": "^11.21.3",
+    "oxc-resolver": "^11.23.0",
     "oxfmt": "^0.48.0",
-    "oxlint": "^1.70.0",
+    "oxlint": "^1.72.0",
     "oxlint-tsgolint": "^0.22.1",
-    "turbo": "^2.9.18",
+    "portless": "^0.15.1",
+    "turbo": "^2.10.2",
     "typescript": "5.9.3"
   },
   "engines": {
