@@ -1,5 +1,6 @@
 const ROOT_CLOUDINARY_FOLDER = "golazo"
 const PRODUCT_CLOUDINARY_FOLDER = `${ROOT_CLOUDINARY_FOLDER}/products`
+const COLLECTION_LOGO_CLOUDINARY_FOLDER = `${ROOT_CLOUDINARY_FOLDER}/collection-logos`
 
 function slugifyCloudinarySegment(value: string) {
   const slug = value
@@ -23,6 +24,16 @@ export function cloudinaryFolderForProductId(productId: string) {
 
 export function cloudinaryFolderForProductUploadKey(uploadKey: string) {
   return `${PRODUCT_CLOUDINARY_FOLDER}/${slugifyCloudinarySegment(uploadKey)}`
+}
+
+export function cloudinaryFolderForCollectionLogoId(categoryId: string) {
+  return `${COLLECTION_LOGO_CLOUDINARY_FOLDER}/${slugifyCloudinarySegment(
+    categoryId
+  )}`
+}
+
+export function cloudinaryPublicIdForCollectionLogoId(categoryId: string) {
+  return `collection-logo-${slugifyCloudinarySegment(categoryId)}`
 }
 
 export function isManagedProductCloudinaryFolder(folder: string) {

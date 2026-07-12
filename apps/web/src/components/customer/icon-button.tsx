@@ -2,12 +2,14 @@ import { cn } from "@workspace/ui/lib/utils"
 import type { ReactNode } from "react"
 
 export function HeaderIconButton({
+  className,
   label,
   count,
   isActive = false,
   onClick,
   children,
 }: {
+  className?: string
   label: string
   count?: number
   isActive?: boolean
@@ -20,7 +22,8 @@ export function HeaderIconButton({
       aria-label={label}
       className={cn(
         "relative grid size-[34px] place-items-center bg-transparent text-[#111] transition outline-none hover:opacity-65 focus-visible:ring-2 focus-visible:ring-[#111]/30",
-        isActive && "text-[#111]"
+        isActive && "text-[#111]",
+        className
       )}
       onClick={onClick}
     >

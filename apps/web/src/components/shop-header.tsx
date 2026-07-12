@@ -1,4 +1,7 @@
-import { CustomerActions } from "@/components/customer-actions"
+import {
+  CustomerActions,
+  CustomerMobileMenuActions,
+} from "@/components/customer-actions"
 import { LocaleCurrencySwitcher } from "@/components/locale-currency-switcher"
 import { ShopHeaderMobileNavigation } from "@/components/shop-header-mobile-navigation"
 import { ShopHeaderNavigation } from "@/components/shop-header-navigation"
@@ -95,7 +98,11 @@ function ShopHeaderBrand({ adminMode }: { adminMode: boolean }) {
     <Link
       to={adminMode ? "/admin" : "/"}
       aria-label="Golazo"
-      className="flex min-w-0 items-center font-oswald text-[2rem] leading-none font-black tracking-normal whitespace-nowrap text-[#111] uppercase"
+      className={cn(
+        "flex min-w-0 items-center font-oswald text-[2rem] leading-none font-black tracking-normal whitespace-nowrap text-[#111] uppercase",
+        !adminMode &&
+          "absolute left-1/2 -translate-x-1/2 lg:static lg:translate-x-0"
+      )}
     >
       GOLAZO
     </Link>
@@ -123,14 +130,16 @@ function ShopHeaderActions({
   )
 
   return (
-    <div className="ml-auto flex min-w-0 items-center gap-1">
+    <div className="ml-auto flex shrink-0 items-center gap-1">
       <ShopHeaderSearchDialog
         initialQuery={routeSearchQuery}
         label={t("searchProducts")}
         products={products}
         onSearch={handleSearch}
       />
-      <LocaleCurrencySwitcher />
+      <div className="hidden md:block">
+        <LocaleCurrencySwitcher />
+      </div>
       <CustomerActions />
     </div>
   )
@@ -239,6 +248,7 @@ function ShopHeaderMobileMenu({
           mode={mode}
           onNavigate={handleNavigate}
         />
+        <CustomerMobileMenuActions onNavigate={handleNavigate} />
       </SheetContent>
     </Sheet>
   )

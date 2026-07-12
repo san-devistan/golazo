@@ -1,1 +1,4 @@
-export { CustomerActions } from "@/components/customer/actions"
+export {
+  CustomerActions,
+  CustomerMobileMenuActions,
+} from "@/components/customer/actions"

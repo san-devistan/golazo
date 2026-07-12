@@ -13,8 +13,10 @@ import {
   signUploadParams,
 } from "./cloudinaryAssets"
 import {
+  cloudinaryFolderForCollectionLogoId,
   cloudinaryFolderForProductId,
   cloudinaryFolderForProductUploadKey,
+  cloudinaryPublicIdForCollectionLogoId,
   isManagedProductCloudinaryFolder,
 } from "./cloudinaryFolders"
 import { productUpsertArgsValidator } from "./shopValidators"
@@ -32,6 +34,8 @@ type CloudinaryUploadSignature = {
   timestamp: number
   signature: string
   assetFolder: string
+  publicId?: string
+  overwrite?: boolean
 }
 
 export const createUploadSignature = action({
@@ -68,6 +72,36 @@ export const createUploadSignature = action({
       timestamp,
       signature: signUploadParams(params, apiSecret),
       assetFolder,
+    }
+  },
+})
+
+export const createCollectionLogoUploadSignature = action({
+  args: {
+    categoryId: v.id("catalogCategories"),
+  },
+  handler: async (_ctx, args): Promise<CloudinaryUploadSignature> => {
+    const { cloudName, apiKey, apiSecret } = cloudinaryCredentials()
+    const assetFolder = cloudinaryFolderForCollectionLogoId(args.categoryId)
+    const publicId = cloudinaryPublicIdForCollectionLogoId(args.categoryId)
+    const timestamp = Math.floor(Date.now() / 1000)
+    const params: Record<string, number | string> = {
+      allowed_formats: IMAGE_UPLOAD_ALLOWED_FORMATS,
+      asset_folder: assetFolder,
+      overwrite: "true",
+      public_id: publicId,
+      timestamp,
+    }
+
+    return {
+      cloudName,
+      apiKey,
+      allowedFormats: IMAGE_UPLOAD_ALLOWED_FORMATS,
+      timestamp,
+      signature: signUploadParams(params, apiSecret),
+      assetFolder,
+      publicId,
+      overwrite: true,
     }
   },
 })

@@ -46,7 +46,7 @@ export function ShopHeaderSearchDialog({
       <button
         type="button"
         aria-label={label}
-        className="mr-6 hidden h-[38px] w-[clamp(190px,14vw,220px)] items-center gap-2.5 border border-black/15 bg-white px-3.5 text-left text-black/55 transition hover:border-[#111] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111] lg:flex"
+        className="grid size-[34px] place-items-center bg-transparent text-[#111] transition hover:opacity-65 focus-visible:ring-2 focus-visible:ring-[#111]/30 focus-visible:outline-none lg:mr-6 lg:flex lg:h-[38px] lg:w-[clamp(190px,14vw,220px)] lg:justify-start lg:gap-2.5 lg:border lg:border-black/15 lg:bg-white lg:px-3.5 lg:text-left lg:text-black/55 lg:hover:border-[#111] lg:hover:opacity-100 lg:focus-visible:ring-0 lg:focus-visible:outline-2 lg:focus-visible:outline-offset-2 lg:focus-visible:outline-[#111]"
       />
     ),
     [label]
@@ -99,7 +99,7 @@ export function ShopHeaderSearchDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={triggerButton}>
-        <span className="min-w-0 flex-1 truncate text-sm">
+        <span className="hidden min-w-0 flex-1 truncate text-sm lg:block">
           {initialQuery || label}
         </span>
         <SearchIcon className="size-[18px] shrink-0" />

@@ -6,6 +6,7 @@ import {
   getProductDeletionPlan,
 } from "./shopDeletionModel"
 import {
+  normalizeNullableHttpUrl,
   normalizeRequiredText,
   normalizeSortOrder,
   normalizeTemplateInput,
@@ -91,6 +92,7 @@ export async function upsertCategoryHandler(
     categoryId: CategoryId | null
     kind?: CategoryKind
     name: string
+    logoUrl?: string | null
     parentId: CategoryId | null
     sortOrder: number
     isActive: boolean
@@ -98,6 +100,7 @@ export async function upsertCategoryHandler(
 ) {
   const now = Date.now()
   const name = normalizeRequiredText("Category name", args.name)
+  const logoUrl = normalizeNullableHttpUrl("Logo URL", args.logoUrl)
   const slug = slugify(name)
   const kind = args.kind ?? "collection"
   const placement = await getCategoryPlacement(ctx, args.parentId, slug, kind)
@@ -113,6 +116,7 @@ export async function upsertCategoryHandler(
       parentId: args.parentId,
       path: placement.path,
       depth: placement.depth,
+      logoUrl,
       cloudinaryFolder: placement.cloudinaryFolder,
       sortOrder: normalizeSortOrder(args.sortOrder),
       isActive: args.isActive,
@@ -131,6 +135,7 @@ export async function upsertCategoryHandler(
     parentId: args.parentId,
     path: placement.path,
     depth: placement.depth,
+    logoUrl,
     cloudinaryFolder: placement.cloudinaryFolder,
     sortOrder,
     isActive: args.isActive,
@@ -146,6 +151,7 @@ export async function upsertCategoryHandler(
       parentId: args.parentId,
       path: placement.path,
       depth: placement.depth,
+      logoUrl,
       cloudinaryFolder: placement.cloudinaryFolder,
       sortOrder,
       isActive: args.isActive,

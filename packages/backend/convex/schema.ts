@@ -21,6 +21,7 @@ export default defineSchema({
     parentId: v.union(v.id("catalogCategories"), v.null()),
     path: v.string(),
     depth: v.number(),
+    logoUrl: v.optional(v.union(v.string(), v.null())),
     cloudinaryFolder: v.string(),
     sortOrder: v.number(),
     isActive: v.boolean(),

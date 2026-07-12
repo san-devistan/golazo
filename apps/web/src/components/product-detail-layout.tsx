@@ -106,20 +106,27 @@ export function ProductDetailLayout({
           )}
         </div>
 
-        <div className="grid gap-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.62fr)] lg:items-start">
+        <ProductAsideHeader
+          productName={detail.product.name}
+          price={formatPrice(totalPriceCents, detail.product.currency)}
+          className="mb-6 lg:hidden"
+        />
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.62fr)] lg:items-start lg:gap-12">
           <ProductImageGallery
             images={galleryImages}
             productName={detail.product.name}
           />
 
-          <aside className="h-fit min-w-0 bg-transparent py-6 lg:sticky lg:top-28">
+          <aside className="h-fit min-w-0 bg-transparent pb-6 lg:sticky lg:top-28 lg:py-6">
             <ProductAsideHeader
               productName={detail.product.name}
               price={formatPrice(totalPriceCents, detail.product.currency)}
+              className="hidden lg:flex"
             />
             <ProductMetadataList metadata={metadata} />
 
-            <div className="mt-7 space-y-7 border-t border-[#dfdfdf] pt-7">
+            <div className="space-y-7 border-t border-[#dfdfdf] pt-6 lg:mt-7 lg:pt-7">
               <ProductOptionControls
                 options={detail.options}
                 choiceValues={choiceValues}
@@ -155,7 +162,9 @@ export function ProductDetailLayout({
           </aside>
         </div>
       </section>
-      {mode !== "admin" && <ShopFooter categories={detail.categories} />}
+      {mode !== "admin" && (
+        <ShopFooter categories={detail.categories} hidePromisesOnMobile />
+      )}
       {mode === "admin" && (
         <>
           <AdminProductEditorDialog

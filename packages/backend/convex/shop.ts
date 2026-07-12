@@ -101,6 +101,7 @@ export const upsertCategory = mutation({
     categoryId: v.union(v.id("catalogCategories"), v.null()),
     kind: v.optional(categoryKindValidator),
     name: v.string(),
+    logoUrl: v.optional(v.union(v.string(), v.null())),
     parentId: v.union(v.id("catalogCategories"), v.null()),
     sortOrder: v.number(),
     isActive: v.boolean(),

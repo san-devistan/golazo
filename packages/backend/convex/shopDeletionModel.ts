@@ -1,5 +1,9 @@
 import type { MutationCtx, QueryCtx } from "./_generated/server"
-import { cloudinaryFolderForProductId } from "./cloudinaryFolders"
+import {
+  cloudinaryFolderForCollectionLogoId,
+  cloudinaryFolderForProductId,
+  cloudinaryPublicIdForCollectionLogoId,
+} from "./cloudinaryFolders"
 import { uniqueNonNullValues } from "./shopNormalize"
 import {
   DELETE_BATCH_SIZE,
@@ -89,11 +93,17 @@ export async function getCategoryDeletionPlan(
 
   return {
     cloudinaryPublicIds: uniqueNonNullValues([
+      category.logoUrl
+        ? cloudinaryPublicIdForCollectionLogoId(category._id)
+        : null,
       ...childPlans.flatMap((plan) => plan.cloudinaryPublicIds),
       ...productPlans.flatMap((plan) => plan.cloudinaryPublicIds),
     ]),
     cloudinaryAssetFolders: uniqueNonNullValues([
       category.cloudinaryFolder,
+      category.logoUrl
+        ? cloudinaryFolderForCollectionLogoId(category._id)
+        : null,
       ...childPlans.flatMap((plan) => plan.cloudinaryAssetFolders),
       ...productPlans.flatMap((plan) => plan.cloudinaryAssetFolders),
     ]),

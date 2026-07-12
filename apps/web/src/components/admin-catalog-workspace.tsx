@@ -1,4 +1,5 @@
 import { ShopStorefront } from "@/components/shop-storefront"
+import { categoryHref } from "@/lib/catalog-navigation"
 import { BASE_CURRENCY } from "@/lib/money"
 import {
   centsToPriceInput,
@@ -33,6 +34,7 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { buttonVariants } from "@workspace/ui/lib/button-variants"
 import { toast } from "@workspace/ui/lib/toast"
+import { cn } from "@workspace/ui/lib/utils"
 import { useAction, useMutation, useQuery } from "convex/react"
 import type { GenericId } from "convex/values"
 import {
@@ -94,6 +96,7 @@ type AdminCategory = {
   parentId: CategoryId | null
   path: string
   depth: number
+  logoUrl?: string | null
   cloudinaryFolder: string
   sortOrder: number
   isActive: boolean
@@ -168,6 +171,7 @@ type CategoryFormState = {
   categoryId: CategoryId | null
   kind: CategoryKind
   name: string
+  logoUrl: string
   parentId: CategoryId | null
   sortOrder: string
   isActive: boolean
@@ -265,6 +269,14 @@ type CloudinaryUploadSignature = {
   timestamp: number
   signature: string
   assetFolder: string
+  publicId?: string
+  overwrite?: boolean
+}
+
+type UploadedCloudinaryImage = {
+  imageUrl: string
+  cloudinaryPublicId: string
+  cloudinaryAssetFolder: string
 }
 
 const PRODUCT_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/avif"
@@ -332,6 +344,7 @@ function categoryFormAutosaveKey(form: CategoryFormState) {
     categoryId: form.categoryId,
     kind: form.kind,
     name: form.name,
+    logoUrl: form.logoUrl,
     parentId: form.parentId,
     sortOrder: form.sortOrder,
     isActive: form.isActive,
@@ -385,6 +398,7 @@ function emptyCategoryForm(
     categoryId: null,
     kind,
     name: "",
+    logoUrl: "",
     parentId,
     sortOrder: String(sortOrder),
     isActive: true,
@@ -509,6 +523,16 @@ function assertProductImageFile(file: File) {
   }
 }
 
+function assertCollectionLogoFile(file: File) {
+  if (!PRODUCT_IMAGE_TYPES.has(file.type)) {
+    throw new Error("Upload a JPG, PNG, WebP, or AVIF logo.")
+  }
+
+  if (file.size > MAX_PRODUCT_IMAGE_SIZE_BYTES) {
+    throw new Error("Collection logos must be 10 MB or smaller.")
+  }
+}
+
 function assertProductImageCapacity(currentCount: number, uploadCount: number) {
   if (currentCount + uploadCount > MAX_PRODUCT_IMAGE_COUNT) {
     throw new Error(
@@ -565,10 +589,10 @@ function productImageUploadFileName(file: File) {
   return `${baseName}-background.webp`
 }
 
-async function uploadProductImageToCloudinary(
+async function uploadImageFileToCloudinary(
   uploadFile: File,
   uploadSignature: CloudinaryUploadSignature
-) {
+): Promise<UploadedCloudinaryImage> {
   const formData = new FormData()
   formData.append("file", uploadFile)
   formData.append("api_key", uploadSignature.apiKey)
@@ -577,6 +601,12 @@ async function uploadProductImageToCloudinary(
   formData.append("signature", uploadSignature.signature)
 
   formData.append("asset_folder", uploadSignature.assetFolder)
+  if (uploadSignature.publicId) {
+    formData.append("public_id", uploadSignature.publicId)
+  }
+  if (uploadSignature.overwrite) {
+    formData.append("overwrite", "true")
+  }
 
   const response = await fetch(
     `https://api.cloudinary.com/v1_1/${uploadSignature.cloudName}/image/upload`,
@@ -592,12 +622,21 @@ async function uploadProductImageToCloudinary(
   }
 
   return {
-    localId: createLocalId("image"),
-    imageId: null,
     imageUrl: payload.secure_url,
     cloudinaryPublicId: payload.public_id,
     cloudinaryAssetFolder:
       payload.asset_folder ?? payload.folder ?? uploadSignature.assetFolder,
+  }
+}
+
+async function uploadProductImageToCloudinary(
+  uploadFile: File,
+  uploadSignature: CloudinaryUploadSignature
+) {
+  return {
+    localId: createLocalId("image"),
+    imageId: null,
+    ...(await uploadImageFileToCloudinary(uploadFile, uploadSignature)),
   } satisfies ProductImageFormState
 }
 
@@ -828,6 +867,9 @@ function useAdminCatalogWorkspaceElement({
   const createCloudinaryUploadSignature = useAction(
     api.cloudinary.createUploadSignature
   )
+  const createCollectionLogoUploadSignature = useAction(
+    api.cloudinary.createCollectionLogoUploadSignature
+  )
   const [catalogState, dispatchCatalog] = useReducer(
     adminCatalogReducer,
     INITIAL_ADMIN_CATALOG_STATE
@@ -1017,6 +1059,7 @@ function useAdminCatalogWorkspaceElement({
           categoryId: form.categoryId,
           kind: form.kind,
           name: form.name,
+          logoUrl: nullableText(form.logoUrl),
           parentId: form.parentId,
           sortOrder: parseSortOrder(form.sortOrder, childCategories.length),
           isActive: form.isActive,
@@ -1263,6 +1306,48 @@ function useAdminCatalogWorkspaceElement({
     ]
   )
 
+  const handleUploadCollectionLogo = useCallback(
+    async (file: File) => {
+      if (isUploading) {
+        return
+      }
+
+      if (!categoryForm?.categoryId) {
+        toast.error("Save the collection before uploading a logo.")
+        return
+      }
+
+      setIsUploading(true)
+
+      try {
+        assertCollectionLogoFile(file)
+        const uploadSignature = await createCollectionLogoUploadSignature({
+          categoryId: categoryForm.categoryId,
+        })
+        const uploadedLogo = await uploadImageFileToCloudinary(
+          file,
+          uploadSignature
+        )
+
+        setCategoryForm((current) =>
+          current ? { ...current, logoUrl: uploadedLogo.imageUrl } : current
+        )
+        toast.success("Logo uploaded to Cloudinary.")
+      } catch (error) {
+        toast.error(getErrorMessage(error))
+      } finally {
+        setIsUploading(false)
+      }
+    },
+    [
+      categoryForm?.categoryId,
+      createCollectionLogoUploadSignature,
+      isUploading,
+      setCategoryForm,
+      setIsUploading,
+    ]
+  )
+
   const handleAddCollection = useCallback(() => {
     const collectionParentId =
       currentCategoryKind === "group" ? (currentCategory?._id ?? null) : null
@@ -1311,6 +1396,7 @@ function useAdminCatalogWorkspaceElement({
           categoryId: category._id,
           kind,
           name: category.name,
+          logoUrl: category.logoUrl ?? "",
           parentId: category.parentId,
           sortOrder: String(category.sortOrder),
           isActive: category.isActive ?? true,
@@ -1332,6 +1418,7 @@ function useAdminCatalogWorkspaceElement({
         categoryId: category._id,
         kind: categoryKindForAdmin(category, categories),
         name: category.name,
+        logoUrl: category.logoUrl ?? "",
         parentId: category.parentId,
         sortOrder: String(category.sortOrder),
         isActive: category.isActive ?? true,
@@ -1383,36 +1470,6 @@ function useAdminCatalogWorkspaceElement({
       setDeleteTarget({ type: "product", product: record.product })
     },
     [productRecordsById, setDeleteTarget]
-  )
-  const handleAddCollectionToGroup = useCallback(
-    async (groupId: CategoryId, collectionId: CategoryId) => {
-      const collection = categories.find(
-        (category) => category._id === collectionId
-      )
-      const group = categories.find((category) => category._id === groupId)
-
-      if (!collection || !group) {
-        toast.error("Collection or group not found.")
-        return
-      }
-
-      try {
-        await upsertCategory({
-          categoryId: collection._id,
-          kind: "collection",
-          name: collection.name,
-          parentId: group._id,
-          sortOrder: categories.filter(
-            (category) => category.parentId === group._id
-          ).length,
-          isActive: collection.isActive,
-        })
-        toast.success("Collection added to group.")
-      } catch (error) {
-        toast.error(getErrorMessage(error))
-      }
-    },
-    [categories, upsertCategory]
   )
   const handleReorderCategoriesClick = useCallback(
     (orderedCategoryIds: Array<CategoryId>) => {
@@ -1482,9 +1539,10 @@ function useAdminCatalogWorkspaceElement({
         form={categoryForm}
         categories={categories}
         groups={groupCategories}
+        isUploading={isUploading}
         onChange={setCategoryForm}
         onDelete={handleDeleteCategoryById}
-        onSelectCollection={handleAddCollectionToGroup}
+        onUploadLogo={handleUploadCollectionLogo}
       />
       <ProductDialog
         form={productForm}
@@ -1973,27 +2031,26 @@ function CategoryDialog({
   form,
   categories,
   groups,
+  isUploading,
   onChange,
   onDelete,
-  onSelectCollection,
+  onUploadLogo,
 }: {
   form: CategoryFormState | null
   categories: Array<AdminCategory>
   groups: Array<AdminCategory>
+  isUploading: boolean
   onChange: React.Dispatch<React.SetStateAction<CategoryFormState | null>>
   onDelete: (categoryId: CategoryId) => void
-  onSelectCollection: (
-    groupId: CategoryId,
-    collectionId: CategoryId
-  ) => Promise<void>
+  onUploadLogo: (file: File) => Promise<void>
 }) {
-  const availableCollections = useMemo(
+  const groupCollections = useMemo(
     () =>
       form?.categoryId && form.kind === "group"
         ? sortBySortOrder(
             categories.filter(
               (category) =>
-                category.parentId !== form.categoryId &&
+                category.parentId === form.categoryId &&
                 categoryKindForAdmin(category, categories) === "collection"
             )
           )
@@ -2016,6 +2073,45 @@ function CategoryDialog({
     },
     [onChange]
   )
+  const canUploadLogo = Boolean(form?.categoryId) && !isUploading
+  const handleLogoFileChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (!canUploadLogo) {
+        event.target.value = ""
+        return
+      }
+
+      const [file] = Array.from(event.target.files ?? [])
+      if (file) {
+        void onUploadLogo(file)
+      }
+      event.target.value = ""
+    },
+    [canUploadLogo, onUploadLogo]
+  )
+  const handleLogoDrop = useCallback(
+    (event: React.DragEvent<HTMLLabelElement>) => {
+      event.preventDefault()
+      if (!canUploadLogo) {
+        return
+      }
+
+      const [file] = Array.from(event.dataTransfer.files)
+      if (file) {
+        void onUploadLogo(file)
+      }
+    },
+    [canUploadLogo, onUploadLogo]
+  )
+  const handleLogoDragOver = useCallback(
+    (event: React.DragEvent<HTMLLabelElement>) => {
+      event.preventDefault()
+    },
+    []
+  )
+  const handleRemoveLogo = useCallback(() => {
+    onChange((current) => (current ? { ...current, logoUrl: "" } : current))
+  }, [onChange])
   const handleGroupChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
       const selectedGroupId = event.target.value
@@ -2039,19 +2135,6 @@ function CategoryDialog({
       })
     },
     [groups, onChange]
-  )
-  const handleCollectionChange = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const collectionId = event.target.value as CategoryId | ""
-
-      if (!collectionId || !form?.categoryId || form.kind !== "group") {
-        return
-      }
-
-      void onSelectCollection(form.categoryId, collectionId)
-      event.target.value = ""
-    },
-    [form?.categoryId, form?.kind, onSelectCollection]
   )
   const kind = form?.kind ?? "collection"
   const label = categoryLabel(kind)
@@ -2096,6 +2179,65 @@ function CategoryDialog({
             </div>
             {kind === "collection" && (
               <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="collection-logo-file">Logo</Label>
+                  {Boolean(form.logoUrl.trim()) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      title="Remove logo"
+                      aria-label="Remove logo"
+                      onClick={handleRemoveLogo}
+                    >
+                      <Trash2Icon />
+                    </Button>
+                  )}
+                </div>
+                <label
+                  htmlFor="collection-logo-file"
+                  title={
+                    form.categoryId
+                      ? "Upload logo"
+                      : "Save the collection before uploading a logo"
+                  }
+                  onDrop={handleLogoDrop}
+                  onDragOver={handleLogoDragOver}
+                  className={cn(
+                    "flex min-h-32 items-center justify-center rounded-lg border border-dashed border-input bg-muted/40 p-4 text-center transition",
+                    canUploadLogo
+                      ? "cursor-pointer hover:bg-muted"
+                      : "cursor-not-allowed opacity-60"
+                  )}
+                >
+                  {form.logoUrl.trim() ? (
+                    <div className="flex h-24 w-full items-center justify-center">
+                      <img
+                        src={form.logoUrl}
+                        alt=""
+                        className="max-h-24 max-w-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                      <ImageUpIcon className="size-4" />
+                      {isUploading ? "Uploading logo" : "Upload logo"}
+                    </span>
+                  )}
+                  <input
+                    id="collection-logo-file"
+                    type="file"
+                    aria-label="Upload collection logo"
+                    accept={PRODUCT_IMAGE_ACCEPT}
+                    className="sr-only"
+                    disabled={!canUploadLogo}
+                    onChange={handleLogoFileChange}
+                  />
+                </label>
+              </div>
+            )}
+            {kind === "collection" && (
+              <div className="space-y-2">
                 <Label htmlFor="collection-group">Group</Label>
                 <select
                   id="collection-group"
@@ -2114,22 +2256,30 @@ function CategoryDialog({
             )}
             {form.categoryId && kind === "group" && (
               <div className="space-y-2">
-                <Label htmlFor="group-collection">Collection</Label>
-                <select
-                  id="group-collection"
-                  defaultValue=""
-                  onChange={handleCollectionChange}
-                  className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  <option value="" disabled>
-                    Select a collection
-                  </option>
-                  {availableCollections.map((collection) => (
-                    <option key={collection._id} value={collection._id}>
-                      {collection.name}
-                    </option>
-                  ))}
-                </select>
+                <Label>Collections</Label>
+                {groupCollections.length > 0 ? (
+                  <ul className="grid max-h-40 gap-1 overflow-y-auto">
+                    {groupCollections.map((collection) => (
+                      <li key={collection._id}>
+                        <Link
+                          to={categoryHref(collection, "admin")}
+                          className="flex items-center justify-between gap-3 px-0 py-1.5 text-sm text-foreground transition hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        >
+                          <span className="min-w-0 truncate">
+                            {collection.name}
+                          </span>
+                          {collection.isActive === false && (
+                            <Badge variant="secondary">Hidden</Badge>
+                          )}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                    No collections in this group.
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -41,14 +41,16 @@ const PRODUCT_TRUST_SIGNALS = [
 ] as const
 
 export function ProductAsideHeader({
+  className,
   price,
   productName,
 }: {
+  className?: string
   price: string
   productName: string
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className={cn("flex items-start justify-between gap-4", className)}>
       <div className="min-w-0 space-y-3">
         <h1 className="font-oswald text-3xl leading-none font-bold tracking-normal uppercase">
           {productName}
@@ -251,13 +253,18 @@ export function ProductImageGallery({
 
 export function ProductTrustSignals() {
   return (
-    <ul className="mt-7 grid list-none grid-cols-3 gap-4 border-t border-black/15 p-0 pt-6 text-center text-sm leading-tight text-black/55">
+    <ul className="mt-7 grid list-none grid-cols-3 gap-2 border-t border-black/15 p-0 pt-6 text-center text-[0.72rem] leading-tight text-black/55 sm:gap-4 sm:text-sm">
       {PRODUCT_TRUST_SIGNALS.map((signal) => {
         const Icon = signal.icon
         return (
-          <li key={signal.label} className="grid justify-items-center gap-2">
+          <li
+            key={signal.label}
+            className="grid min-w-0 content-start justify-items-center gap-2"
+          >
             <Icon className="size-5 text-[#111]" />
-            <span>{signal.label}</span>
+            <span className="max-w-[9ch] text-balance sm:max-w-[12ch]">
+              {signal.label}
+            </span>
           </li>
         )
       })}

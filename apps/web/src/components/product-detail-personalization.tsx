@@ -30,7 +30,7 @@ export function PersonalizationOptionControl({
   return (
     <div className="grid gap-3">
       <div className="text-sm font-medium">{label}</div>
-      <div className="flex flex-wrap items-start gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         {!option.isRequired && (
           <PersonalizationToggleButton
             checked={enabled}
@@ -131,7 +131,7 @@ function PersonalizationFieldInput({
         required={field.required}
         placeholder={field.label}
         value={value}
-        className="h-9 rounded-none border-foreground/25 bg-background text-sm font-semibold"
+        className="h-11 rounded-none border-foreground/25 bg-background text-sm font-semibold"
         onChange={handleChange}
       />
     </div>

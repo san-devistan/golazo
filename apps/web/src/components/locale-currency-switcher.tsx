@@ -10,7 +10,11 @@ import { cn } from "@workspace/ui/lib/utils"
 import { ChevronDownIcon, LanguagesIcon } from "lucide-react"
 import { useCallback, type ReactNode } from "react"
 
-export function LocaleCurrencySwitcher() {
+export function LocaleCurrencySwitcher({
+  triggerClassName,
+}: {
+  triggerClassName?: string
+}) {
   const { currency, locale, t } = useAppPreferences()
   const selectedCurrency = currencyOption(currency)
   const selectedLocale = LOCALE_OPTIONS.find((option) => option.code === locale)
@@ -20,7 +24,10 @@ export function LocaleCurrencySwitcher() {
       <PopoverTrigger
         type="button"
         aria-label={t("preferencesLabel")}
-        className="inline-flex h-[34px] shrink-0 items-center gap-1.5 bg-transparent px-1 text-[0.8125rem] whitespace-nowrap text-[#111] transition hover:opacity-65 focus-visible:ring-2 focus-visible:ring-[#111]/30 focus-visible:outline-none"
+        className={cn(
+          "inline-flex h-[34px] shrink-0 items-center gap-1.5 bg-transparent px-1 text-[0.8125rem] whitespace-nowrap text-[#111] transition hover:opacity-65 focus-visible:ring-2 focus-visible:ring-[#111]/30 focus-visible:outline-none",
+          triggerClassName
+        )}
       >
         <LanguagesIcon className="size-[17px]" />
         <span>

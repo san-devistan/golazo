@@ -3,12 +3,19 @@ import { CartOrderItem } from "@/components/customer/cart-order-item"
 import { CartSheet } from "@/components/customer/cart-sheet"
 import { HeaderIconButton } from "@/components/customer/icon-button"
 import { WishlistSheet } from "@/components/customer/wishlist-sheet"
+import { LocaleCurrencySwitcher } from "@/components/locale-currency-switcher"
 import { type CustomerCartItem, useCustomerState } from "@/lib/customer-state"
 import { useAppPreferences } from "@/lib/preferences"
 import { useNavigate } from "@tanstack/react-router"
 import { cn } from "@workspace/ui/lib/utils"
 import { HeartIcon, ShoppingBagIcon, UserIcon } from "lucide-react"
-import { type FocusEvent, useCallback, useMemo, useState } from "react"
+import {
+  type FocusEvent,
+  type ReactNode,
+  useCallback,
+  useMemo,
+  useState,
+} from "react"
 
 const MAX_CART_PREVIEW_ITEMS = 3
 
@@ -94,6 +101,7 @@ export function CustomerActions() {
       <HeaderIconButton
         label={isAuthenticated ? t("account") : t("signIn")}
         isActive={isAuthenticated}
+        className="hidden md:grid"
         onClick={handleAccountClick}
       >
         <UserIcon className="size-5" />
@@ -101,6 +109,7 @@ export function CustomerActions() {
       <HeaderIconButton
         label={t("wishlist")}
         count={wishlistCount}
+        className="hidden md:grid"
         onClick={handleWishlistOpen}
       >
         <HeartIcon className="size-5" />
@@ -149,6 +158,88 @@ export function CustomerActions() {
         onRemoveItem={removeCartItem}
       />
     </>
+  )
+}
+
+export function CustomerMobileMenuActions({
+  onNavigate,
+}: {
+  onNavigate?: () => void
+}) {
+  const navigate = useNavigate()
+  const { t } = useAppPreferences()
+  const { isAuthenticated, toggleWishlist, wishlistCount, wishlistItems } =
+    useCustomerState()
+  const [isAuthOpen, setIsAuthOpen] = useState(false)
+  const [isWishlistOpen, setIsWishlistOpen] = useState(false)
+
+  const handleAccountClick = useCallback(() => {
+    if (isAuthenticated) {
+      onNavigate?.()
+      void navigate({ to: "/account" })
+      return
+    }
+
+    setIsAuthOpen(true)
+  }, [isAuthenticated, navigate, onNavigate])
+  const handleWishlistOpen = useCallback(() => {
+    setIsWishlistOpen(true)
+  }, [])
+
+  return (
+    <>
+      <div className="mt-auto grid gap-2 border-t border-border bg-white p-4">
+        <CustomerMenuActionButton
+          label={isAuthenticated ? t("account") : t("signIn")}
+          onClick={handleAccountClick}
+        >
+          <UserIcon className="size-5" />
+        </CustomerMenuActionButton>
+        <CustomerMenuActionButton
+          label={t("wishlist")}
+          count={wishlistCount}
+          onClick={handleWishlistOpen}
+        >
+          <HeartIcon className="size-5" />
+        </CustomerMenuActionButton>
+        <LocaleCurrencySwitcher triggerClassName="flex min-h-12 w-full justify-center gap-2 border border-[#111] px-3 font-oswald text-sm leading-none font-bold tracking-normal uppercase hover:bg-[#111] hover:text-white hover:opacity-100" />
+      </div>
+      <AuthDialog open={isAuthOpen} onOpenChange={setIsAuthOpen} />
+      <WishlistSheet
+        items={wishlistItems}
+        open={isWishlistOpen}
+        onOpenChange={setIsWishlistOpen}
+        onToggleWishlist={toggleWishlist}
+      />
+    </>
+  )
+}
+
+function CustomerMenuActionButton({
+  children,
+  count,
+  label,
+  onClick,
+}: {
+  children: ReactNode
+  count?: number
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className="relative flex min-h-12 min-w-0 items-center justify-center gap-2 border border-[#111] bg-white px-3 font-oswald text-sm leading-none font-bold tracking-normal text-[#111] uppercase transition hover:bg-[#111] hover:text-white focus-visible:ring-2 focus-visible:ring-[#111]/30 focus-visible:outline-none"
+      onClick={onClick}
+    >
+      {children}
+      <span className="min-w-0 truncate">{label}</span>
+      {count !== undefined && count > 0 && (
+        <span className="absolute -top-1.5 -right-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#111] px-1.5 text-[10px] leading-5 font-black text-white">
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+    </button>
   )
 }
 

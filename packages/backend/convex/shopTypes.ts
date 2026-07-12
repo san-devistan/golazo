@@ -65,6 +65,7 @@ export type CategoryDoc = {
   parentId: CategoryId | null
   path: string
   depth: number
+  logoUrl?: string | null
   cloudinaryFolder: string
   sortOrder: number
   isActive: boolean

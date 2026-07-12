@@ -40,7 +40,10 @@ export function normalizeNullableText(value: string | null) {
   return nextValue ? nextValue : null
 }
 
-function normalizeMetadataLinkUrl(value: string | null | undefined) {
+export function normalizeNullableHttpUrl(
+  label: string,
+  value: string | null | undefined
+) {
   const linkText = normalizeNullableText(value ?? null)
   if (linkText === null) {
     return null
@@ -54,14 +57,18 @@ function normalizeMetadataLinkUrl(value: string | null | undefined) {
   try {
     url = new URL(urlText)
   } catch {
-    throw new Error("Metadata link must be a valid URL.")
+    throw new Error(`${label} must be a valid URL.`)
   }
 
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("Metadata link must be an HTTP or HTTPS URL.")
+    throw new Error(`${label} must be an HTTP or HTTPS URL.`)
   }
 
   return url.href
+}
+
+function normalizeMetadataLinkUrl(value: string | null | undefined) {
+  return normalizeNullableHttpUrl("Metadata link", value)
 }
 
 export function normalizeSortOrder(value: number) {
