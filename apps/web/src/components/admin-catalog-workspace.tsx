@@ -26,8 +26,6 @@ import { Button } from "@workspace/ui/components/button"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
@@ -42,10 +40,12 @@ import {
   ArrowUpIcon,
   EyeIcon,
   EyeOffIcon,
+  FolderPlusIcon,
   GripVerticalIcon,
   ImageUpIcon,
+  PackagePlusIcon,
+  PencilIcon,
   PlusIcon,
-  SaveIcon,
   Trash2Icon,
 } from "lucide-react"
 import {
@@ -66,6 +66,7 @@ type ProductOptionTemplateId = GenericId<"productOptionTemplates">
 type ProductStatus = "draft" | "published"
 type ProductRecordStatus = ProductStatus | "archived"
 type ProductMetadataType = "text" | "number" | "boolean" | "link"
+type CategoryKind = "collection" | "group"
 
 type ChoiceConfig = {
   type: "choice"
@@ -89,6 +90,7 @@ type PersonalizationConfig = {
 type AdminCategory = {
   _id: CategoryId
   name: string
+  kind?: CategoryKind
   parentId: CategoryId | null
   path: string
   depth: number
@@ -164,6 +166,7 @@ const EMPTY_ADMIN_PRODUCTS: Array<AdminProductRecord["product"]> = []
 
 type CategoryFormState = {
   categoryId: CategoryId | null
+  kind: CategoryKind
   name: string
   parentId: CategoryId | null
   sortOrder: string
@@ -281,6 +284,7 @@ const INITIAL_ADMIN_CATALOG_STATE: AdminCatalogState = {
   isUploading: false,
   showBackendSetupState: false,
 }
+const AUTOSAVE_DELAY_MS = 500
 const MAX_PRODUCT_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
 const MAX_PRODUCT_IMAGE_COUNT = 12
 
@@ -302,6 +306,68 @@ function productVisibilityStatus(status: ProductRecordStatus): ProductStatus {
   return status === "published" ? "published" : "draft"
 }
 
+function categoryKindForAdmin(
+  category: AdminCategory,
+  categories: Array<AdminCategory>
+): CategoryKind {
+  if (category.kind) {
+    return category.kind
+  }
+
+  return categories.some((item) => item.parentId === category._id)
+    ? "group"
+    : "collection"
+}
+
+function categoryLabel(kind: CategoryKind) {
+  return kind === "group" ? "group" : "collection"
+}
+
+function categoryTitle(kind: CategoryKind) {
+  return kind === "group" ? "Group" : "Collection"
+}
+
+function categoryFormAutosaveKey(form: CategoryFormState) {
+  return JSON.stringify({
+    categoryId: form.categoryId,
+    kind: form.kind,
+    name: form.name,
+    parentId: form.parentId,
+    sortOrder: form.sortOrder,
+    isActive: form.isActive,
+  })
+}
+
+function productFormAutosaveKey(form: ProductFormState) {
+  return JSON.stringify({
+    productId: form.productId,
+    categoryId: form.categoryId,
+    name: form.name,
+    description: form.description,
+    basePrice: form.basePrice,
+    currency: form.currency,
+    status: form.status,
+    sku: form.sku,
+    cloudinaryAssetFolder: form.cloudinaryAssetFolder,
+    images: form.images.map((image) => ({
+      imageId: image.imageId,
+      imageUrl: image.imageUrl,
+      cloudinaryPublicId: image.cloudinaryPublicId,
+      cloudinaryAssetFolder: image.cloudinaryAssetFolder,
+    })),
+    sortOrder: form.sortOrder,
+    optionTemplateIds: form.optionTemplateIds,
+    optionIdsByTemplateId: form.optionIdsByTemplateId,
+    metadata: form.metadata.map((item) => ({
+      metadataId: item.metadataId,
+      label: item.label,
+      type: item.type,
+      value: item.value,
+      showOnProductPage: item.showOnProductPage,
+    })),
+  })
+}
+
 function metadataTypeFromValue(value: string): ProductMetadataType {
   if (value === "number" || value === "boolean" || value === "link") {
     return value
@@ -311,11 +377,13 @@ function metadataTypeFromValue(value: string): ProductMetadataType {
 }
 
 function emptyCategoryForm(
+  kind: CategoryKind,
   parentId: CategoryId | null,
   sortOrder: number
 ): CategoryFormState {
   return {
     categoryId: null,
+    kind,
     name: "",
     parentId,
     sortOrder: String(sortOrder),
@@ -613,6 +681,54 @@ function buildOptionsFromTemplates(
   })
 }
 
+function productUpsertPayload({
+  form,
+  productRecords,
+  templates,
+}: {
+  form: ProductFormState
+  productRecords: Array<AdminProductRecord>
+  templates: Array<AdminOptionTemplate>
+}) {
+  if (!form.categoryId) {
+    throw new Error("Select a collection before saving the product.")
+  }
+
+  const productSortFallback = productRecords.filter(
+    (record) => record.product.categoryId === form.categoryId
+  ).length
+
+  return {
+    productId: form.productId,
+    categoryId: form.categoryId,
+    name: form.name,
+    description: form.description,
+    basePriceCents: priceInputToCents(form.basePrice),
+    currency: BASE_CURRENCY,
+    status: form.status,
+    sku: nullableText(form.sku),
+    cloudinaryAssetFolder: nullableText(form.cloudinaryAssetFolder),
+    sortOrder: parseSortOrder(form.sortOrder, productSortFallback),
+    images: form.images.map((image, index) => ({
+      imageId: image.imageId,
+      imageUrl: image.imageUrl,
+      cloudinaryPublicId: nullableText(image.cloudinaryPublicId),
+      cloudinaryAssetFolder: nullableText(image.cloudinaryAssetFolder),
+      sortOrder: index,
+    })),
+    options: buildOptionsFromTemplates(form, templates),
+    metadata: form.metadata.map((item, index) => ({
+      metadataId: item.metadataId,
+      label: item.label,
+      type: item.type,
+      value: item.value,
+      linkUrl: null,
+      showOnProductPage: item.showOnProductPage,
+      sortOrder: index,
+    })),
+  }
+}
+
 function sortProductRecords(records: Array<AdminProductRecord>) {
   return Array.from(records).toSorted((first, second) => {
     const firstOrder = first.product.sortOrder ?? Number.MAX_SAFE_INTEGER
@@ -709,7 +825,6 @@ function useAdminCatalogWorkspaceElement({
   const reorderCategories = useMutation(api.shop.reorderCategories)
   const reorderProducts = useMutation(api.shop.reorderProducts)
   const setCategoryVisibility = useMutation(api.shop.setCategoryVisibility)
-  const setProductVisibility = useMutation(api.shop.setProductVisibility)
   const createCloudinaryUploadSignature = useAction(
     api.cloudinary.createUploadSignature
   )
@@ -717,6 +832,8 @@ function useAdminCatalogWorkspaceElement({
     adminCatalogReducer,
     INITIAL_ADMIN_CATALOG_STATE
   )
+  const lastSavedCategoryKeyRef = useRef<string | null>(null)
+  const lastSavedProductKeyRef = useRef<string | null>(null)
   const {
     categoryForm,
     deleteTarget,
@@ -769,6 +886,9 @@ function useAdminCatalogWorkspaceElement({
     categoryId,
     categoryPath,
   })
+  const currentCategoryKind = currentCategory
+    ? categoryKindForAdmin(currentCategory, categories)
+    : null
   const parentId = currentCategory?._id ?? null
   const childCategories = useMemo(
     () =>
@@ -778,16 +898,19 @@ function useAdminCatalogWorkspaceElement({
     [categories, parentId]
   )
   const productRecords = data?.products ?? EMPTY_PRODUCT_RECORDS
-  const pageCategoryIds = useMemo(
-    () =>
-      currentCategory
-        ? new Set<CategoryId>([
-            currentCategory._id,
-            ...childCategories.map((category) => category._id),
-          ])
-        : new Set<CategoryId>(),
-    [childCategories, currentCategory]
-  )
+  const pageCategoryIds = useMemo(() => {
+    if (!currentCategory) {
+      return new Set<CategoryId>()
+    }
+
+    if (currentCategoryKind === "group") {
+      return new Set<CategoryId>(
+        childCategories.map((category) => category._id)
+      )
+    }
+
+    return new Set<CategoryId>([currentCategory._id])
+  }, [childCategories, currentCategory, currentCategoryKind])
   const pageProductRecords = useMemo(
     () =>
       sortProductRecords(
@@ -801,23 +924,47 @@ function useAdminCatalogWorkspaceElement({
   const directProductRecords = useMemo(
     () =>
       sortProductRecords(
-        currentCategory
+        currentCategory && currentCategoryKind === "collection"
           ? productRecords.filter(
               (record) => record.product.categoryId === currentCategory._id
             )
           : EMPTY_PRODUCT_RECORDS
       ),
-    [currentCategory, productRecords]
+    [currentCategory, currentCategoryKind, productRecords]
   )
-  const canAddProduct = Boolean(currentCategory)
+  const canAddCollection =
+    currentCategory === null || currentCategoryKind === "group"
+  const canAddGroup = currentCategory === null
+  const canAddProduct = currentCategoryKind === "collection"
   const productRecordsById = useMemo(
     () => new Map(productRecords.map((record) => [record.product._id, record])),
     [productRecords]
   )
-  const productAssignableCategories = useMemo(
-    () => (currentCategory ? [currentCategory, ...childCategories] : []),
-    [childCategories, currentCategory]
+  const groupCategories = useMemo(
+    () =>
+      sortBySortOrder(
+        categories.filter(
+          (category) =>
+            category.parentId === null &&
+            categoryKindForAdmin(category, categories) === "group"
+        )
+      ),
+    [categories]
   )
+  const productAssignableCategories = useMemo(() => {
+    if (!currentCategory) {
+      return []
+    }
+
+    if (currentCategoryKind === "group") {
+      return childCategories.filter(
+        (category) =>
+          categoryKindForAdmin(category, categories) === "collection"
+      )
+    }
+
+    return [currentCategory]
+  }, [categories, childCategories, currentCategory, currentCategoryKind])
   const pageProducts = useMemo(
     () => pageProductRecords.map((record) => record.product),
     [pageProductRecords]
@@ -863,85 +1010,110 @@ function useAdminCatalogWorkspaceElement({
     )
   }, [data, productRecords, setProductForm])
 
-  const handleSaveCategory = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault()
-      if (!categoryForm) {
-        return
-      }
-
+  const saveCategoryForm = useCallback(
+    async (form: CategoryFormState, key: string) => {
       try {
-        await upsertCategory({
-          categoryId: categoryForm.categoryId,
-          name: categoryForm.name,
-          parentId: categoryForm.parentId,
-          sortOrder: parseSortOrder(
-            categoryForm.sortOrder,
-            childCategories.length
-          ),
-          isActive: categoryForm.isActive,
+        const categoryId = await upsertCategory({
+          categoryId: form.categoryId,
+          kind: form.kind,
+          name: form.name,
+          parentId: form.parentId,
+          sortOrder: parseSortOrder(form.sortOrder, childCategories.length),
+          isActive: form.isActive,
         })
-        toast.success("Category saved.")
-        setCategoryForm(null)
+
+        lastSavedCategoryKeyRef.current = key
+        setCategoryForm((current) => {
+          if (!current || categoryFormAutosaveKey(current) !== key) {
+            return current
+          }
+
+          const nextForm = { ...current, categoryId }
+          lastSavedCategoryKeyRef.current = categoryFormAutosaveKey(nextForm)
+
+          return nextForm
+        })
       } catch (error) {
         toast.error(getErrorMessage(error))
       }
     },
-    [categoryForm, childCategories.length, setCategoryForm, upsertCategory]
+    [childCategories.length, setCategoryForm, upsertCategory]
   )
 
-  const handleSaveProduct = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault()
-      if (!productForm?.categoryId) {
-        toast.error("Select a category before saving the product.")
-        return
-      }
-
+  const saveProductForm = useCallback(
+    async (form: ProductFormState, key: string) => {
       try {
-        const productSortFallback = productRecords.filter(
-          (record) => record.product.categoryId === productForm.categoryId
-        ).length
+        const productId = await upsertProduct(
+          productUpsertPayload({ form, productRecords, templates })
+        )
 
-        await upsertProduct({
-          productId: productForm.productId,
-          categoryId: productForm.categoryId,
-          name: productForm.name,
-          description: productForm.description,
-          basePriceCents: priceInputToCents(productForm.basePrice),
-          currency: BASE_CURRENCY,
-          status: productForm.status,
-          sku: nullableText(productForm.sku),
-          cloudinaryAssetFolder: nullableText(
-            productForm.cloudinaryAssetFolder
-          ),
-          sortOrder: parseSortOrder(productForm.sortOrder, productSortFallback),
-          images: productForm.images.map((image, index) => ({
-            imageId: image.imageId,
-            imageUrl: image.imageUrl,
-            cloudinaryPublicId: nullableText(image.cloudinaryPublicId),
-            cloudinaryAssetFolder: nullableText(image.cloudinaryAssetFolder),
-            sortOrder: index,
-          })),
-          options: buildOptionsFromTemplates(productForm, templates),
-          metadata: productForm.metadata.map((item, index) => ({
-            metadataId: item.metadataId,
-            label: item.label,
-            type: item.type,
-            value: item.value,
-            linkUrl: null,
-            showOnProductPage: item.showOnProductPage,
-            sortOrder: index,
-          })),
+        lastSavedProductKeyRef.current = key
+        setProductForm((current) => {
+          if (!current || productFormAutosaveKey(current) !== key) {
+            return current
+          }
+
+          const nextForm = { ...current, productId }
+          lastSavedProductKeyRef.current = productFormAutosaveKey(nextForm)
+
+          return nextForm
         })
-        toast.success("Product saved.")
-        setProductForm(null)
       } catch (error) {
         toast.error(getErrorMessage(error))
       }
     },
-    [productForm, productRecords, setProductForm, templates, upsertProduct]
+    [productRecords, setProductForm, templates, upsertProduct]
   )
+
+  useEffect(() => {
+    if (!categoryForm) {
+      lastSavedCategoryKeyRef.current = null
+      return undefined
+    }
+
+    if (!categoryForm.name.trim()) {
+      return undefined
+    }
+
+    const key = categoryFormAutosaveKey(categoryForm)
+    if (lastSavedCategoryKeyRef.current === key) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void saveCategoryForm(categoryForm, key)
+    }, AUTOSAVE_DELAY_MS)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [categoryForm, saveCategoryForm])
+
+  useEffect(() => {
+    if (!productForm) {
+      lastSavedProductKeyRef.current = null
+      return undefined
+    }
+
+    if (!productForm.categoryId || !productForm.name.trim()) {
+      return undefined
+    }
+
+    try {
+      priceInputToCents(productForm.basePrice)
+    } catch {
+      return undefined
+    }
+
+    const key = productFormAutosaveKey(productForm)
+    if (lastSavedProductKeyRef.current === key) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void saveProductForm(productForm, key)
+    }, AUTOSAVE_DELAY_MS)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [productForm, saveProductForm])
 
   const handleReorderCategories = useCallback(
     async (orderedCategoryIds: Array<CategoryId>) => {
@@ -950,7 +1122,7 @@ function useAdminCatalogWorkspaceElement({
           parentId,
           orderedCategoryIds,
         })
-        toast.success("Category order saved.")
+        toast.success("Catalog order saved.")
       } catch (error) {
         toast.error(getErrorMessage(error))
       }
@@ -985,31 +1157,14 @@ function useAdminCatalogWorkspaceElement({
           categoryId: category._id,
           isActive,
         })
-        toast.success(isActive ? "Category visible." : "Category hidden.")
-      } catch (error) {
-        toast.error(getErrorMessage(error))
-      }
-    },
-    [setCategoryVisibility]
-  )
-
-  const handleToggleProductVisibility = useCallback(
-    async (product: AdminProductRecord["product"]) => {
-      const status = product.status === "published" ? "draft" : "published"
-
-      try {
-        await setProductVisibility({
-          productId: product._id,
-          status,
-        })
         toast.success(
-          status === "published" ? "Product published." : "Product hidden."
+          isActive ? "Catalog item visible." : "Catalog item hidden."
         )
       } catch (error) {
         toast.error(getErrorMessage(error))
       }
     },
-    [setProductVisibility]
+    [setCategoryVisibility]
   )
 
   const handleConfirmDelete = useCallback(async () => {
@@ -1024,7 +1179,9 @@ function useAdminCatalogWorkspaceElement({
         const parentHref = parentAdminHref(deleteTarget.category)
 
         await deleteCategory({ categoryId: deleteTarget.category._id })
-        toast.success("Category deleted.")
+        toast.success(
+          `${categoryLabel(deleteTarget.category.kind ?? "collection")} deleted.`
+        )
         setDeleteTarget(null)
 
         if (currentCategory?._id === deleteTarget.category._id) {
@@ -1106,31 +1263,99 @@ function useAdminCatalogWorkspaceElement({
     ]
   )
 
-  const handleAddCategory = useCallback(() => {
-    setCategoryForm(emptyCategoryForm(parentId, childCategories.length))
-  }, [childCategories.length, parentId, setCategoryForm])
-  const handleAddProduct = useCallback(() => {
-    setProductForm(
-      emptyProductForm(parentId, templates, directProductRecords.length)
+  const handleAddCollection = useCallback(() => {
+    const collectionParentId =
+      currentCategoryKind === "group" ? (currentCategory?._id ?? null) : null
+
+    setCategoryForm(
+      emptyCategoryForm(
+        "collection",
+        collectionParentId,
+        childCategories.length
+      )
     )
-  }, [directProductRecords.length, parentId, setProductForm, templates])
+  }, [
+    childCategories.length,
+    currentCategory?._id,
+    currentCategoryKind,
+    setCategoryForm,
+  ])
+  const handleAddGroup = useCallback(() => {
+    setCategoryForm(emptyCategoryForm("group", null, childCategories.length))
+  }, [childCategories.length, setCategoryForm])
+  const handleAddProduct = useCallback(() => {
+    if (!currentCategory || currentCategoryKind !== "collection") {
+      return
+    }
+
+    setProductForm(
+      emptyProductForm(
+        currentCategory._id,
+        templates,
+        directProductRecords.length
+      )
+    )
+  }, [
+    currentCategory,
+    currentCategoryKind,
+    directProductRecords.length,
+    setProductForm,
+    templates,
+  ])
+  const handleAddToCategory = useCallback(
+    (category: AdminCategory) => {
+      const kind = categoryKindForAdmin(category, categories)
+
+      if (kind === "group") {
+        setCategoryForm({
+          categoryId: category._id,
+          kind,
+          name: category.name,
+          parentId: category.parentId,
+          sortOrder: String(category.sortOrder),
+          isActive: category.isActive ?? true,
+        })
+        return
+      }
+
+      const productCount = productRecords.filter(
+        (record) => record.product.categoryId === category._id
+      ).length
+
+      setProductForm(emptyProductForm(category._id, templates, productCount))
+    },
+    [categories, productRecords, setProductForm, templates]
+  )
   const handleEditCategory = useCallback(
     (category: AdminCategory) => {
       setCategoryForm({
         categoryId: category._id,
+        kind: categoryKindForAdmin(category, categories),
         name: category.name,
         parentId: category.parentId,
         sortOrder: String(category.sortOrder),
         isActive: category.isActive ?? true,
       })
     },
-    [setCategoryForm]
+    [categories, setCategoryForm]
   )
-  const handleDeleteCategory = useCallback(
-    (category: AdminCategory) => {
-      setDeleteTarget({ type: "category", category })
+  const handleDeleteCategoryById = useCallback(
+    (categoryId: CategoryId) => {
+      const category = categories.find((item) => item._id === categoryId)
+
+      if (!category) {
+        return
+      }
+
+      setDeleteTarget({
+        type: "category",
+        category: {
+          ...category,
+          kind: categoryKindForAdmin(category, categories),
+        },
+      })
     },
-    [setDeleteTarget]
+    [categories, setDeleteTarget]
   )
   const handleToggleCategory = useCallback(
     (category: AdminCategory) => {
@@ -1147,17 +1372,47 @@ function useAdminCatalogWorkspaceElement({
     },
     [productRecordsById, setProductForm]
   )
-  const handleDeleteProduct = useCallback(
-    (product: AdminProductRecord["product"]) => {
-      setDeleteTarget({ type: "product", product })
+  const handleDeleteProductById = useCallback(
+    (productId: ProductId) => {
+      const record = productRecordsById.get(productId)
+
+      if (!record) {
+        return
+      }
+
+      setDeleteTarget({ type: "product", product: record.product })
     },
-    [setDeleteTarget]
+    [productRecordsById, setDeleteTarget]
   )
-  const handleToggleProduct = useCallback(
-    (product: AdminProductRecord["product"]) => {
-      void handleToggleProductVisibility(product)
+  const handleAddCollectionToGroup = useCallback(
+    async (groupId: CategoryId, collectionId: CategoryId) => {
+      const collection = categories.find(
+        (category) => category._id === collectionId
+      )
+      const group = categories.find((category) => category._id === groupId)
+
+      if (!collection || !group) {
+        toast.error("Collection or group not found.")
+        return
+      }
+
+      try {
+        await upsertCategory({
+          categoryId: collection._id,
+          kind: "collection",
+          name: collection.name,
+          parentId: group._id,
+          sortOrder: categories.filter(
+            (category) => category.parentId === group._id
+          ).length,
+          isActive: collection.isActive,
+        })
+        toast.success("Collection added to group.")
+      } catch (error) {
+        toast.error(getErrorMessage(error))
+      }
     },
-    [handleToggleProductVisibility]
+    [categories, upsertCategory]
   )
   const handleReorderCategoriesClick = useCallback(
     (orderedCategoryIds: Array<CategoryId>) => {
@@ -1202,23 +1457,34 @@ function useAdminCatalogWorkspaceElement({
         childCategories={childCategories}
         products={pageProducts}
         title={currentCategory?.name}
-        canAddProduct={canAddProduct}
-        onAddCategory={handleAddCategory}
-        onAddProduct={handleAddProduct}
+        onAddToCategory={handleAddToCategory}
         onEditCategory={handleEditCategory}
-        onDeleteCategory={handleDeleteCategory}
         onToggleCategoryVisibility={handleToggleCategory}
         onEditProduct={handleEditProduct}
-        onDeleteProduct={handleDeleteProduct}
-        onToggleProductVisibility={handleToggleProduct}
         onReorderCategories={handleReorderCategoriesClick}
         onReorderProducts={handleReorderProductsClick}
+      />
+      <AdminCatalogDock
+        canAddCollection={canAddCollection}
+        canAddGroup={canAddGroup}
+        canAddProduct={canAddProduct}
+        collection={
+          currentCategoryKind === "collection" ? currentCategory : null
+        }
+        onAddCollection={handleAddCollection}
+        onAddGroup={handleAddGroup}
+        onAddProduct={handleAddProduct}
+        onEditCollection={handleEditCategory}
+        onToggleCollectionVisibility={handleToggleCategory}
       />
 
       <CategoryDialog
         form={categoryForm}
+        categories={categories}
+        groups={groupCategories}
         onChange={setCategoryForm}
-        onSubmit={handleSaveCategory}
+        onDelete={handleDeleteCategoryById}
+        onSelectCollection={handleAddCollectionToGroup}
       />
       <ProductDialog
         form={productForm}
@@ -1226,8 +1492,8 @@ function useAdminCatalogWorkspaceElement({
         assignableCategories={productAssignableCategories}
         isUploading={isUploading}
         onChange={setProductForm}
+        onDelete={handleDeleteProductById}
         onUploadImages={handleUploadImages}
-        onSubmit={handleSaveProduct}
       />
       <DeleteConfirmationDialog
         target={deleteTarget}
@@ -1236,6 +1502,101 @@ function useAdminCatalogWorkspaceElement({
         onConfirm={handleConfirmDeleteClick}
       />
     </>
+  )
+}
+
+function AdminCatalogDock({
+  canAddCollection,
+  canAddGroup,
+  canAddProduct,
+  collection,
+  onAddCollection,
+  onAddGroup,
+  onAddProduct,
+  onEditCollection,
+  onToggleCollectionVisibility,
+}: {
+  canAddCollection: boolean
+  canAddGroup: boolean
+  canAddProduct: boolean
+  collection: AdminCategory | null
+  onAddCollection: () => void
+  onAddGroup: () => void
+  onAddProduct: () => void
+  onEditCollection: (collection: AdminCategory) => void
+  onToggleCollectionVisibility: (collection: AdminCategory) => void
+}) {
+  if (!canAddCollection && !canAddGroup && !canAddProduct) {
+    return null
+  }
+
+  return (
+    <div className="fixed inset-x-0 bottom-5 z-50 flex justify-center px-4">
+      <div className="flex items-center gap-1 border border-[#111] bg-white p-1 shadow-[0_16px_40px_rgb(0_0_0/0.16)]">
+        {canAddCollection && (
+          <Button
+            type="button"
+            className="rounded-none bg-[#111] text-white hover:bg-[#333]"
+            onClick={onAddCollection}
+          >
+            <FolderPlusIcon />
+            Collection
+          </Button>
+        )}
+        {canAddGroup && (
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-none"
+            onClick={onAddGroup}
+          >
+            <PlusIcon />
+            Group
+          </Button>
+        )}
+        {canAddProduct && (
+          <Button
+            type="button"
+            className="rounded-none bg-[#111] text-white hover:bg-[#333]"
+            onClick={onAddProduct}
+          >
+            <PackagePlusIcon />
+            Product
+          </Button>
+        )}
+        {collection && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              title="Edit collection"
+              aria-label="Edit collection"
+              className="rounded-none"
+              onClick={() => onEditCollection(collection)}
+            >
+              <PencilIcon />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              title={
+                collection.isActive ? "Hide collection" : "Show collection"
+              }
+              aria-label={
+                collection.isActive ? "Hide collection" : "Show collection"
+              }
+              aria-pressed={collection.isActive}
+              className="rounded-none"
+              onClick={() => onToggleCollectionVisibility(collection)}
+            >
+              {collection.isActive ? <EyeIcon /> : <EyeOffIcon />}
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -1261,6 +1622,8 @@ export function AdminProductEditorDialog({
       form: null,
     })
   const [isUploading, setIsUploading] = useState(false)
+  const lastSavedEditorProductKeyRef = useRef<string | null>(null)
+  const savedProductSlugRef = useRef<string | null>(null)
 
   const categories = data?.categories ?? EMPTY_ADMIN_CATEGORIES
   const templates = data?.optionTemplates ?? EMPTY_OPTION_TEMPLATES
@@ -1271,6 +1634,9 @@ export function AdminProductEditorDialog({
     categories.find(
       (category) => category._id === productRecord?.product.categoryId
     ) ?? null
+  const currentCategoryKind = currentCategory
+    ? categoryKindForAdmin(currentCategory, categories)
+    : null
   const childCategories = useMemo(
     () =>
       currentCategory
@@ -1282,10 +1648,20 @@ export function AdminProductEditorDialog({
         : EMPTY_ADMIN_CATEGORIES,
     [categories, currentCategory]
   )
-  const productAssignableCategories = useMemo(
-    () => (currentCategory ? [currentCategory, ...childCategories] : []),
-    [childCategories, currentCategory]
-  )
+  const productAssignableCategories = useMemo(() => {
+    if (!currentCategory) {
+      return []
+    }
+
+    if (currentCategoryKind === "group") {
+      return childCategories.filter(
+        (category) =>
+          categoryKindForAdmin(category, categories) === "collection"
+      )
+    }
+
+    return [currentCategory]
+  }, [categories, childCategories, currentCategory, currentCategoryKind])
   const sourceProductId =
     isOpen && productRecord ? productRecord.product._id : null
   let productForm = productEditorForm.form
@@ -1320,69 +1696,38 @@ export function AdminProductEditorDialog({
     [onOpenChange]
   )
 
-  const handleSaveProduct = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault()
-      if (!productForm?.categoryId) {
-        toast.error("Select a category before saving the product.")
-        return
-      }
-
+  const saveProductEditorForm = useCallback(
+    async (form: ProductFormState, key: string) => {
       try {
-        const productSortFallback = productRecords.filter(
-          (record) => record.product.categoryId === productForm.categoryId
-        ).length
+        const productId = await upsertProduct(
+          productUpsertPayload({ form, productRecords, templates })
+        )
+        const nextSlug = slugify(form.name)
 
-        await upsertProduct({
-          productId: productForm.productId,
-          categoryId: productForm.categoryId,
-          name: productForm.name,
-          description: productForm.description,
-          basePriceCents: priceInputToCents(productForm.basePrice),
-          currency: BASE_CURRENCY,
-          status: productForm.status,
-          sku: nullableText(productForm.sku),
-          cloudinaryAssetFolder: nullableText(
-            productForm.cloudinaryAssetFolder
-          ),
-          sortOrder: parseSortOrder(productForm.sortOrder, productSortFallback),
-          images: productForm.images.map((image, index) => ({
-            imageId: image.imageId,
-            imageUrl: image.imageUrl,
-            cloudinaryPublicId: nullableText(image.cloudinaryPublicId),
-            cloudinaryAssetFolder: nullableText(image.cloudinaryAssetFolder),
-            sortOrder: index,
-          })),
-          options: buildOptionsFromTemplates(productForm, templates),
-          metadata: productForm.metadata.map((item, index) => ({
-            metadataId: item.metadataId,
-            label: item.label,
-            type: item.type,
-            value: item.value,
-            linkUrl: null,
-            showOnProductPage: item.showOnProductPage,
-            sortOrder: index,
-          })),
+        if (productRecord && nextSlug !== slugify(productRecord.product.name)) {
+          savedProductSlugRef.current = nextSlug
+        }
+
+        lastSavedEditorProductKeyRef.current = key
+        setProductEditorForm((current) => {
+          if (!current.form || productFormAutosaveKey(current.form) !== key) {
+            return current
+          }
+
+          const nextForm = { ...current.form, productId }
+          lastSavedEditorProductKeyRef.current =
+            productFormAutosaveKey(nextForm)
+
+          return {
+            sourceProductId: current.sourceProductId,
+            form: nextForm,
+          }
         })
-        toast.success("Product saved.")
-        setProductEditorForm({
-          sourceProductId: null,
-          form: null,
-        })
-        onOpenChange(false)
-        onSaved?.(slugify(productForm.name))
       } catch (error) {
         toast.error(getErrorMessage(error))
       }
     },
-    [
-      onOpenChange,
-      onSaved,
-      productForm,
-      productRecords,
-      templates,
-      upsertProduct,
-    ]
+    [productRecord, productRecords, templates, upsertProduct]
   )
 
   const handleUploadImages = useCallback(
@@ -1436,6 +1781,43 @@ export function AdminProductEditorDialog({
     [createCloudinaryUploadSignature, productForm]
   )
 
+  useEffect(() => {
+    if (!productForm) {
+      lastSavedEditorProductKeyRef.current = null
+      return undefined
+    }
+
+    if (!productForm.categoryId || !productForm.name.trim()) {
+      return undefined
+    }
+
+    try {
+      priceInputToCents(productForm.basePrice)
+    } catch {
+      return undefined
+    }
+
+    const key = productFormAutosaveKey(productForm)
+    if (lastSavedEditorProductKeyRef.current === key) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void saveProductEditorForm(productForm, key)
+    }, AUTOSAVE_DELAY_MS)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [productForm, saveProductEditorForm])
+
+  useEffect(() => {
+    if (isOpen || !savedProductSlugRef.current) {
+      return
+    }
+
+    onSaved?.(savedProductSlugRef.current)
+    savedProductSlugRef.current = null
+  }, [isOpen, onSaved])
+
   return (
     <ProductDialog
       form={isOpen ? productForm : null}
@@ -1444,7 +1826,6 @@ export function AdminProductEditorDialog({
       isUploading={isUploading}
       onChange={handleChangeProductForm}
       onUploadImages={handleUploadImages}
-      onSubmit={handleSaveProduct}
     />
   )
 }
@@ -1467,6 +1848,11 @@ function DeleteConfirmationDialog({
   onConfirm: () => void
 }) {
   const isCategory = target?.type === "category"
+  const targetCategoryKind =
+    target?.type === "category"
+      ? (target.category.kind ?? "collection")
+      : "collection"
+  const targetLabel = isCategory ? categoryLabel(targetCategoryKind) : "product"
   const name =
     target?.type === "category"
       ? target.category.name
@@ -1484,12 +1870,10 @@ function DeleteConfirmationDialog({
     <AlertDialog open={target !== null} onOpenChange={handleOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>
-            Delete {isCategory ? "category" : "product"}?
-          </AlertDialogTitle>
+          <AlertDialogTitle>Delete {targetLabel}?</AlertDialogTitle>
           <AlertDialogDescription>
             {isCategory
-              ? `This will hard delete "${name}", every sub-category, and all products stored under it from Convex and Cloudinary.`
+              ? `This will hard delete "${name}" and everything stored under it from Convex and Cloudinary.`
               : `This will hard delete "${name}" and its images, options, and metadata from Convex and Cloudinary.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -1540,8 +1924,8 @@ function AdminCategoryUnavailable({
       categories={categories}
       childCategories={EMPTY_ADMIN_CATEGORIES}
       products={EMPTY_ADMIN_PRODUCTS}
-      title="Category unavailable"
-      subtitle="This admin folder does not exist anymore."
+      title="Catalog item unavailable"
+      subtitle="This collection or group does not exist anymore."
     />
   )
 }
@@ -1587,13 +1971,35 @@ function BackendSetupState() {
 
 function CategoryDialog({
   form,
+  categories,
+  groups,
   onChange,
-  onSubmit,
+  onDelete,
+  onSelectCollection,
 }: {
   form: CategoryFormState | null
+  categories: Array<AdminCategory>
+  groups: Array<AdminCategory>
   onChange: React.Dispatch<React.SetStateAction<CategoryFormState | null>>
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>
+  onDelete: (categoryId: CategoryId) => void
+  onSelectCollection: (
+    groupId: CategoryId,
+    collectionId: CategoryId
+  ) => Promise<void>
 }) {
+  const availableCollections = useMemo(
+    () =>
+      form?.categoryId && form.kind === "group"
+        ? sortBySortOrder(
+            categories.filter(
+              (category) =>
+                category.parentId !== form.categoryId &&
+                categoryKindForAdmin(category, categories) === "collection"
+            )
+          )
+        : EMPTY_ADMIN_CATEGORIES,
+    [categories, form]
+  )
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
@@ -1601,12 +2007,6 @@ function CategoryDialog({
       }
     },
     [onChange]
-  )
-  const handleSubmit = useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
-      void onSubmit(event)
-    },
-    [onSubmit]
   )
   const handleNameChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1616,36 +2016,123 @@ function CategoryDialog({
     },
     [onChange]
   )
+  const handleGroupChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      const selectedGroupId = event.target.value
+
+      onChange((current) => {
+        if (!current || current.kind !== "collection") {
+          return current
+        }
+
+        if (!selectedGroupId) {
+          return { ...current, parentId: null }
+        }
+
+        const selectedGroup = groups.find(
+          (group) => group._id === selectedGroupId
+        )
+
+        return selectedGroup
+          ? { ...current, parentId: selectedGroup._id }
+          : current
+      })
+    },
+    [groups, onChange]
+  )
+  const handleCollectionChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      const collectionId = event.target.value as CategoryId | ""
+
+      if (!collectionId || !form?.categoryId || form.kind !== "group") {
+        return
+      }
+
+      void onSelectCollection(form.categoryId, collectionId)
+      event.target.value = ""
+    },
+    [form?.categoryId, form?.kind, onSelectCollection]
+  )
+  const kind = form?.kind ?? "collection"
+  const label = categoryLabel(kind)
+  const title = categoryTitle(kind)
+  const handleDelete = useCallback(() => {
+    if (!form?.categoryId) {
+      return
+    }
+
+    onDelete(form.categoryId)
+    onChange(null)
+  }, [form?.categoryId, onChange, onDelete])
 
   return (
     <Dialog open={form !== null} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {form?.categoryId ? "Edit category" : "Add category"}
-          </DialogTitle>
-          <DialogDescription>
-            Categories are the folders customers and admins navigate through.
-          </DialogDescription>
+        <DialogHeader className="flex-row items-center justify-between gap-3 pr-8">
+          <DialogTitle>{form?.categoryId ? title : `Add ${title}`}</DialogTitle>
+          {form?.categoryId && (
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon-sm"
+              title={`Delete ${label}`}
+              aria-label={`Delete ${label}`}
+              onClick={handleDelete}
+            >
+              <Trash2Icon />
+            </Button>
+          )}
         </DialogHeader>
         {form && (
-          <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="category-name">Category name</Label>
+              <Label htmlFor="category-name">Name</Label>
               <Input
                 id="category-name"
                 value={form.name}
                 onChange={handleNameChange}
-                placeholder="Ligue 1"
+                placeholder={kind === "group" ? "National teams" : "Ligue 1"}
               />
             </div>
-            <DialogFooter>
-              <Button type="submit">
-                <SaveIcon />
-                Save category
-              </Button>
-            </DialogFooter>
-          </form>
+            {kind === "collection" && (
+              <div className="space-y-2">
+                <Label htmlFor="collection-group">Group</Label>
+                <select
+                  id="collection-group"
+                  value={form.parentId ?? ""}
+                  onChange={handleGroupChange}
+                  className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <option value="">No group</option>
+                  {groups.map((group) => (
+                    <option key={group._id} value={group._id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {form.categoryId && kind === "group" && (
+              <div className="space-y-2">
+                <Label htmlFor="group-collection">Collection</Label>
+                <select
+                  id="group-collection"
+                  defaultValue=""
+                  onChange={handleCollectionChange}
+                  className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <option value="" disabled>
+                    Select a collection
+                  </option>
+                  {availableCollections.map((collection) => (
+                    <option key={collection._id} value={collection._id}>
+                      {collection.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         )}
       </DialogContent>
     </Dialog>
@@ -1658,16 +2145,16 @@ function ProductDialog({
   assignableCategories,
   isUploading,
   onChange,
+  onDelete,
   onUploadImages,
-  onSubmit,
 }: {
   form: ProductFormState | null
   templates: Array<AdminOptionTemplate>
   assignableCategories: Array<AdminCategory>
   isUploading: boolean
   onChange: React.Dispatch<React.SetStateAction<ProductFormState | null>>
+  onDelete?: (productId: ProductId) => void
   onUploadImages: (files: Array<File>) => Promise<void>
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>
 }) {
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -1677,29 +2164,69 @@ function ProductDialog({
     },
     [onChange]
   )
-  const handleSubmit = useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
-      void onSubmit(event)
-    },
-    [onSubmit]
-  )
   const handleMetadataChange = useCallback(
     (metadata: Array<ProductMetadataFormState>) => {
       onChange((current) => (current ? { ...current, metadata } : current))
     },
     [onChange]
   )
+  const handleToggleVisibility = useCallback(() => {
+    onChange((current) =>
+      current
+        ? {
+            ...current,
+            status: current.status === "published" ? "draft" : "published",
+          }
+        : current
+    )
+  }, [onChange])
+  const handleDelete = useCallback(() => {
+    if (!form?.productId || !onDelete) {
+      return
+    }
+
+    onDelete(form.productId)
+    onChange(null)
+  }, [form?.productId, onChange, onDelete])
+  const isPublished = form?.status === "published"
+  const VisibilityIcon = isPublished ? EyeIcon : EyeOffIcon
+  const visibilityLabel = isPublished ? "Hide product" : "Publish product"
 
   return (
     <Dialog open={form !== null} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-5xl">
-        <DialogHeader>
-          <DialogTitle>
-            {form?.productId ? "Edit product" : "Add product"}
-          </DialogTitle>
+        <DialogHeader className="flex-row items-center justify-between gap-3 pr-8">
+          <DialogTitle>Product</DialogTitle>
+          {form?.productId && (
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                title={visibilityLabel}
+                aria-label={visibilityLabel}
+                aria-pressed={isPublished}
+                onClick={handleToggleVisibility}
+              >
+                <VisibilityIcon />
+              </Button>
+              {onDelete && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon-sm"
+                  title="Delete product"
+                  aria-label="Delete product"
+                  onClick={handleDelete}
+                >
+                  <Trash2Icon />
+                </Button>
+              )}
+            </div>
+          )}
         </DialogHeader>
         {form && (
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <div className="space-y-6">
             <ProductBasicsForm
               form={form}
               assignableCategories={assignableCategories}
@@ -1720,13 +2247,7 @@ function ProductDialog({
               metadata={form.metadata}
               onChange={handleMetadataChange}
             />
-            <DialogFooter>
-              <Button type="submit" size="lg">
-                <SaveIcon />
-                Save product
-              </Button>
-            </DialogFooter>
-          </form>
+          </div>
         )}
       </DialogContent>
     </Dialog>
@@ -1742,8 +2263,6 @@ function ProductBasicsForm({
   assignableCategories: Array<AdminCategory>
   onChange: React.Dispatch<React.SetStateAction<ProductFormState | null>>
 }) {
-  const currentCategory = assignableCategories[0]
-  const subCategories = assignableCategories.slice(1)
   const handleNameChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       onChange((current) =>
@@ -1780,7 +2299,7 @@ function ProductBasicsForm({
   return (
     <section className="grid gap-4 lg:grid-cols-2">
       <div className="space-y-2">
-        <Label htmlFor="product-name">Product name</Label>
+        <Label htmlFor="product-name">Name</Label>
         <Input
           id="product-name"
           value={form.name}
@@ -1790,7 +2309,7 @@ function ProductBasicsForm({
       </div>
       {assignableCategories.length > 1 && (
         <div className="space-y-2">
-          <Label htmlFor="product-category">Placement</Label>
+          <Label htmlFor="product-category">Collection</Label>
           <select
             id="product-category"
             aria-label="Product placement"
@@ -1799,36 +2318,23 @@ function ProductBasicsForm({
             className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <option value="" disabled>
-              Select a category
+              Select a collection
             </option>
-            {currentCategory && (
-              <option value={currentCategory._id}>
-                {currentCategory.name}
+            {assignableCategories.map((category) => (
+              <option key={category._id} value={category._id}>
+                {category.name}
               </option>
-            )}
-            {subCategories.length > 0 && (
-              <optgroup label="Sub-categories">
-                {subCategories.map((category) => (
-                  <option key={category._id} value={category._id}>
-                    {category.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
+            ))}
           </select>
         </div>
       )}
       <div className="space-y-2">
-        <Label htmlFor="product-price">Base price ({BASE_CURRENCY})</Label>
+        <Label htmlFor="product-price">Price</Label>
         <Input
           id="product-price"
           value={form.basePrice}
           onChange={handleBasePriceChange}
         />
-        <p className="text-xs text-muted-foreground">
-          Product prices are entered in EUR. Checkout uses the selected customer
-          currency.
-        </p>
       </div>
     </section>
   )
@@ -1858,7 +2364,7 @@ function CloudinaryImageForm({
   )
 
   return (
-    <section className="rounded-lg border p-4">
+    <section>
       <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h3 className="font-medium">Images</h3>
@@ -2076,7 +2582,7 @@ function TemplateActivationForm({
   const activeTemplateIds = new Set(form.optionTemplateIds)
 
   return (
-    <section className="rounded-lg border p-4">
+    <section>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h3 className="font-medium">Product options</h3>
@@ -2182,7 +2688,7 @@ function ProductMetadataForm({
   }, [metadata, onChange])
 
   return (
-    <section className="rounded-lg border p-4">
+    <section>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h3 className="font-medium">Metadata</h3>

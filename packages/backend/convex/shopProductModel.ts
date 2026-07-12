@@ -12,7 +12,7 @@ import {
   savedProductAssetFolder,
   slugify,
 } from "./shopNormalize"
-import { getCategoryOrThrow } from "./shopQueryModel"
+import { getProductCollectionOrThrow } from "./shopQueryModel"
 import {
   DELETE_BATCH_SIZE,
   type NormalizedProductImage,
@@ -294,7 +294,7 @@ export async function upsertProductRecord(
   args: ProductUpsertArgs
 ): Promise<ProductUpsertResult> {
   const now = Date.now()
-  await getCategoryOrThrow(ctx, args.categoryId)
+  await getProductCollectionOrThrow(ctx, args.categoryId)
   const existingProduct = await getExistingProductForWrite(ctx, args.productId)
   const name = normalizeRequiredText("Product name", args.name)
   const slug = slugify(name)

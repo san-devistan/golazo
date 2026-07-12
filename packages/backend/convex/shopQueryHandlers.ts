@@ -21,14 +21,18 @@ async function activeCategories(ctx: QueryCtx) {
 
 export async function listCatalogHandler(ctx: QueryCtx) {
   const categories = await activeCategories(ctx)
-  const activeCategoryIds = new Set(categories.map((category) => category._id))
+  const activeCollectionIds = new Set(
+    categories.flatMap((category) =>
+      category.kind === "group" ? [] : [category._id]
+    )
+  )
   const products = await ctx.db
     .query("products")
     .withIndex("by_status_and_createdAt", (q) => q.eq("status", "published"))
     .order("desc")
     .take(120)
   const activeProducts = products.filter((product) =>
-    activeCategoryIds.has(product.categoryId)
+    activeCollectionIds.has(product.categoryId)
   )
 
   return {
@@ -45,10 +49,14 @@ async function categoryPagePayload(
   const childCategoryIds = categories
     .filter((category) => category.parentId === currentCategory._id)
     .map((category) => category._id)
-  const products = await listPublishedProductsForCategories(ctx, [
-    currentCategory._id,
-    ...childCategoryIds,
-  ])
+  const productCategoryIds =
+    currentCategory.kind === "group"
+      ? childCategoryIds
+      : [currentCategory._id, ...childCategoryIds]
+  const products = await listPublishedProductsForCategories(
+    ctx,
+    productCategoryIds
+  )
 
   return { currentCategory, categories, products }
 }
@@ -94,13 +102,28 @@ async function productDetailPayload(
     .query("catalogCategories")
     .withIndex("by_path")
     .take(300)
+  const visibleCategories = includeInactiveCategories
+    ? categories
+    : categories.filter((item) => item.isActive)
+  const visibleCollectionIds = new Set(
+    visibleCategories.flatMap((item) =>
+      item.kind === "group" ? [] : [item._id]
+    )
+  )
+  const products = await ctx.db
+    .query("products")
+    .withIndex("by_status_and_createdAt", (q) => q.eq("status", "published"))
+    .order("desc")
+    .take(120)
+  const visibleProducts = products.filter((item) =>
+    visibleCollectionIds.has(item.categoryId)
+  )
 
   return {
     product,
     category,
-    categories: includeInactiveCategories
-      ? categories
-      : categories.filter((item) => item.isActive),
+    categories: visibleCategories,
+    products: await productsWithImageUrls(ctx, visibleProducts),
     images: await listImagesForProduct(ctx, product._id),
     options: await listOptionsForProduct(ctx, product._id),
     metadata: await listMetadataForProduct(

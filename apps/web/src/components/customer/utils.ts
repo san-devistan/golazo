@@ -24,5 +24,8 @@ export function displayCartConfigurationValue({
     return value
   }
 
-  return value.replace(/\b(?:name|number):\s*/gi, "").trim()
+  return value
+    .replace(/\b(?:name|number):\s*/gi, "")
+    .replace(/\s*,\s*/g, " ")
+    .trim()
 }

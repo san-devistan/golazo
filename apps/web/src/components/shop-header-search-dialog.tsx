@@ -175,7 +175,9 @@ function HeaderSearchSuggestions({
         <div key={product._id} className="w-[180px] shrink-0">
           <SearchProductCard
             backHref={searchBackHref(query)}
+            mediaChrome="minimal"
             product={product}
+            textDensity="compact"
           />
         </div>
       ))}
@@ -187,8 +189,8 @@ function searchBackHref(query: string) {
   const normalizedQuery = query.trim()
 
   return normalizedQuery
-    ? `/search?q=${encodeURIComponent(normalizedQuery)}`
-    : "/search"
+    ? `/products?q=${encodeURIComponent(normalizedQuery)}`
+    : "/products"
 }
 
 function searchSuggestions(products: Array<ShopHeaderProduct>, query: string) {

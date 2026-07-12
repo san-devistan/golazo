@@ -14,6 +14,7 @@ import {
   PRODUCT_IMAGE_LIMIT,
   type CategoryDoc,
   type CategoryId,
+  type CategoryKind,
   type CategoryPlacement,
   type ProductDoc,
   type ProductId,
@@ -154,6 +155,29 @@ function cloudinaryFolderForPath(path: string) {
   return cloudinaryFolderForCatalogPath(path)
 }
 
+function assertCategoryPlacement({
+  kind,
+  parent,
+}: {
+  kind: CategoryKind
+  parent: CategoryDoc | null
+}) {
+  if (kind === "group") {
+    if (parent !== null) {
+      throw new Error("Groups must live at the catalog root.")
+    }
+
+    return
+  }
+
+  if (
+    parent !== null &&
+    (parent.kind === "collection" || parent.parentId !== null)
+  ) {
+    throw new Error("Collections can only live at the root or inside a group.")
+  }
+}
+
 export async function getCategoryOrThrow(
   ctx: QueryCtx | MutationCtx,
   categoryId: CategoryId
@@ -166,12 +190,28 @@ export async function getCategoryOrThrow(
   return category
 }
 
+export async function getProductCollectionOrThrow(
+  ctx: QueryCtx | MutationCtx,
+  categoryId: CategoryId
+) {
+  const category = await getCategoryOrThrow(ctx, categoryId)
+
+  if (category.kind === "group") {
+    throw new Error("Products can only be stored in collections.")
+  }
+
+  return category
+}
+
 export async function getCategoryPlacement(
   ctx: QueryCtx | MutationCtx,
   parentId: CategoryId | null,
-  slug: string
+  slug: string,
+  kind: CategoryKind = "collection"
 ): Promise<CategoryPlacement> {
   if (parentId === null) {
+    assertCategoryPlacement({ kind, parent: null })
+
     return {
       path: slug,
       depth: 0,
@@ -180,6 +220,7 @@ export async function getCategoryPlacement(
   }
 
   const parent = await getCategoryOrThrow(ctx, parentId)
+  assertCategoryPlacement({ kind, parent })
   const path = `${parent.path}/${slug}`
 
   return {

@@ -61,6 +61,17 @@ export type ProductDetail = {
     name: string
     path: string
   }
+  products: Array<{
+    _id: ProductId
+    categoryId: string
+    name: string
+    slug?: string | null
+    basePriceCents: number
+    currency: string
+    imageUrl: string | null
+    imageUrls?: Array<string>
+    sortOrder?: number
+  }>
   categories: Array<{
     _id: string
     name: string

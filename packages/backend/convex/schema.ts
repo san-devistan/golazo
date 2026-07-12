@@ -6,6 +6,7 @@ import {
   checkoutFulfillmentStatusValidator,
   checkoutOrderStatusValidator,
   checkoutShippingAddressValidator,
+  categoryKindValidator,
   productMetadataTypeValidator,
   productOptionConfigValidator,
   productOptionTemplateKindValidator,
@@ -16,6 +17,7 @@ export default defineSchema({
   catalogCategories: defineTable({
     name: v.string(),
     slug: v.string(),
+    kind: v.optional(categoryKindValidator),
     parentId: v.union(v.id("catalogCategories"), v.null()),
     path: v.string(),
     depth: v.number(),

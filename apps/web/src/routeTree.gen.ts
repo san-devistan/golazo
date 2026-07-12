@@ -9,10 +9,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ProductsRouteImport } from './routes/products'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProductsIndexRouteImport } from './routes/products.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as ProductsSlugRouteImport } from './routes/products.$slug'
 import { Route as PagesPageIdRouteImport } from './routes/pages.$pageId'
@@ -37,6 +39,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProductsRoute = ProductsRouteImport.update({
+  id: '/products',
+  path: '/products',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -57,15 +64,20 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProductsIndexRoute = ProductsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ProductsRoute,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
 const ProductsSlugRoute = ProductsSlugRouteImport.update({
-  id: '/products/$slug',
-  path: '/products/$slug',
-  getParentRoute: () => rootRouteImport,
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => ProductsRoute,
 } as any)
 const PagesPageIdRoute = PagesPageIdRouteImport.update({
   id: '/pages/$pageId',
@@ -130,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/$': typeof SplatRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRouteWithChildren
+  '/products': typeof ProductsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/admin/$': typeof AdminSplatRoute
@@ -141,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/pages/$pageId': typeof PagesPageIdRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/products/': typeof ProductsIndexRoute
   '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
   '/admin/products/$slug': typeof AdminProductsSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -161,6 +175,7 @@ export interface FileRoutesByTo {
   '/pages/$pageId': typeof PagesPageIdRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin': typeof AdminIndexRoute
+  '/products': typeof ProductsIndexRoute
   '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
   '/admin/products/$slug': typeof AdminProductsSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -172,6 +187,7 @@ export interface FileRoutesById {
   '/$': typeof SplatRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRouteWithChildren
+  '/products': typeof ProductsRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/admin/$': typeof AdminSplatRoute
@@ -183,6 +199,7 @@ export interface FileRoutesById {
   '/pages/$pageId': typeof PagesPageIdRoute
   '/products/$slug': typeof ProductsSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/products/': typeof ProductsIndexRoute
   '/admin/categories/$categoryId': typeof AdminCategoriesCategoryIdRoute
   '/admin/products/$slug': typeof AdminProductsSlugRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -195,6 +212,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/account'
     | '/admin'
+    | '/products'
     | '/reset-password'
     | '/search'
     | '/admin/$'
@@ -206,6 +224,7 @@ export interface FileRouteTypes {
     | '/pages/$pageId'
     | '/products/$slug'
     | '/admin/'
+    | '/products/'
     | '/admin/categories/$categoryId'
     | '/admin/products/$slug'
     | '/api/auth/$'
@@ -226,6 +245,7 @@ export interface FileRouteTypes {
     | '/pages/$pageId'
     | '/products/$slug'
     | '/admin'
+    | '/products'
     | '/admin/categories/$categoryId'
     | '/admin/products/$slug'
     | '/api/auth/$'
@@ -236,6 +256,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/account'
     | '/admin'
+    | '/products'
     | '/reset-password'
     | '/search'
     | '/admin/$'
@@ -247,6 +268,7 @@ export interface FileRouteTypes {
     | '/pages/$pageId'
     | '/products/$slug'
     | '/admin/'
+    | '/products/'
     | '/admin/categories/$categoryId'
     | '/admin/products/$slug'
     | '/api/auth/$'
@@ -258,12 +280,12 @@ export interface RootRouteChildren {
   SplatRoute: typeof SplatRoute
   AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRouteWithChildren
+  ProductsRoute: typeof ProductsRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   SearchRoute: typeof SearchRoute
   CategoriesCategoryIdRoute: typeof CategoriesCategoryIdRoute
   CheckoutSuccessRoute: typeof CheckoutSuccessRoute
   PagesPageIdRoute: typeof PagesPageIdRoute
-  ProductsSlugRoute: typeof ProductsSlugRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiProductsImageBackgroundRoute: typeof ApiProductsImageBackgroundRoute
 }
@@ -282,6 +304,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/products': {
+      id: '/products'
+      path: '/products'
+      fullPath: '/products'
+      preLoaderRoute: typeof ProductsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -312,6 +341,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/products/': {
+      id: '/products/'
+      path: '/'
+      fullPath: '/products/'
+      preLoaderRoute: typeof ProductsIndexRouteImport
+      parentRoute: typeof ProductsRoute
+    }
     '/admin/': {
       id: '/admin/'
       path: '/'
@@ -321,10 +357,10 @@ declare module '@tanstack/react-router' {
     }
     '/products/$slug': {
       id: '/products/$slug'
-      path: '/products/$slug'
+      path: '/$slug'
       fullPath: '/products/$slug'
       preLoaderRoute: typeof ProductsSlugRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof ProductsRoute
     }
     '/pages/$pageId': {
       id: '/pages/$pageId'
@@ -428,17 +464,31 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
+interface ProductsRouteChildren {
+  ProductsSlugRoute: typeof ProductsSlugRoute
+  ProductsIndexRoute: typeof ProductsIndexRoute
+}
+
+const ProductsRouteChildren: ProductsRouteChildren = {
+  ProductsSlugRoute: ProductsSlugRoute,
+  ProductsIndexRoute: ProductsIndexRoute,
+}
+
+const ProductsRouteWithChildren = ProductsRoute._addFileChildren(
+  ProductsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   AccountRoute: AccountRoute,
   AdminRoute: AdminRouteWithChildren,
+  ProductsRoute: ProductsRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   SearchRoute: SearchRoute,
   CategoriesCategoryIdRoute: CategoriesCategoryIdRoute,
   CheckoutSuccessRoute: CheckoutSuccessRoute,
   PagesPageIdRoute: PagesPageIdRoute,
-  ProductsSlugRoute: ProductsSlugRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiProductsImageBackgroundRoute: ApiProductsImageBackgroundRoute,
 }

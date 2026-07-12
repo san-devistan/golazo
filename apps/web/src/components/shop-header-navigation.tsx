@@ -16,6 +16,10 @@ import {
   type ShopHeaderMode,
   type ShopHeaderProduct,
 } from "@/components/shop-header-navigation-data"
+import {
+  SHOP_UNDERLINE_LINK_CLASS_NAME,
+  ShopUnderlineText,
+} from "@/components/shop-underline-text"
 import { categoryHref } from "@/lib/catalog-navigation"
 import { Link } from "@tanstack/react-router"
 import { cn } from "@workspace/ui/lib/utils"
@@ -346,17 +350,15 @@ function ShopHeaderCategoryLink({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       className={cn(
-        "relative inline-flex h-9 max-w-40 items-center justify-center rounded-none px-4 py-1.5 font-oswald text-sm font-bold tracking-normal uppercase transition-all outline-none after:absolute after:right-4 after:bottom-0 after:left-4 after:h-px after:origin-center after:scale-x-0 after:bg-current after:opacity-0 after:transition hover:after:scale-x-100 hover:after:opacity-100 focus-visible:ring-2 focus-visible:ring-[#111]/30 focus-visible:outline-none focus-visible:after:scale-x-100 focus-visible:after:opacity-100",
-        isActive && "after:scale-x-100 after:opacity-100"
+        SHOP_UNDERLINE_LINK_CLASS_NAME,
+        "h-9 max-w-40 items-center justify-center rounded-none px-4 py-1.5"
       )}
     >
-      <ShopHeaderCategoryLabel>{category.name}</ShopHeaderCategoryLabel>
+      <ShopUnderlineText active={isActive} showArrow={false} variant="header">
+        {category.name}
+      </ShopUnderlineText>
     </Link>
   )
-}
-
-function ShopHeaderCategoryLabel({ children }: { children: string }) {
-  return <span className="block max-w-32 truncate">{children}</span>
 }
 
 function ShopHeaderProductPreviewGrid({
@@ -380,7 +382,9 @@ function ShopHeaderProductPreviewGrid({
         <div key={product._id} className="w-[180px] shrink-0">
           <SearchProductCard
             backHref={backHref}
+            mediaChrome="minimal"
             product={headerProductToSearchProduct(product)}
+            textDensity="compact"
           />
         </div>
       ))}

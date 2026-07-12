@@ -28,9 +28,9 @@ export function PersonalizationOptionControl({
   const formatPrice = useMoneyFormatter()
 
   return (
-    <div className="grid gap-3 sm:grid-cols-[96px_1fr] sm:items-start">
-      <div className="pt-2 text-sm font-medium">{label}</div>
-      <div className="space-y-3">
+    <div className="grid gap-3">
+      <div className="text-sm font-medium">{label}</div>
+      <div className="flex flex-wrap items-start gap-3">
         {!option.isRequired && (
           <PersonalizationToggleButton
             checked={enabled}
@@ -40,12 +40,12 @@ export function PersonalizationOptionControl({
           />
         )}
         {option.isRequired && option.priceDeltaCents > 0 && (
-          <div className="inline-flex min-h-11 min-w-11 items-center justify-center bg-[#eef1f3] px-3 text-sm font-semibold">
+          <div className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center bg-[#eef1f3] px-3 text-sm font-semibold">
             +{formatPrice(option.priceDeltaCents, currency)}
           </div>
         )}
         {enabled && (
-          <div className="grid max-w-sm gap-2 sm:grid-cols-2">
+          <div className="grid min-w-[min(18rem,100%)] flex-1 gap-2 sm:grid-cols-2">
             {option.config.fields.map((field) => (
               <PersonalizationFieldInput
                 key={field.key}
@@ -83,7 +83,7 @@ function PersonalizationToggleButton({
   return (
     <label
       className={cn(
-        "inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center px-3 text-sm font-semibold transition has-focus-visible:ring-2 has-focus-visible:ring-[#111]/30",
+        "inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center px-3 text-sm font-semibold transition has-focus-visible:ring-2 has-focus-visible:ring-[#111]/30",
         checked
           ? "bg-foreground text-background"
           : "bg-[#eef1f3] text-foreground hover:bg-black/10"

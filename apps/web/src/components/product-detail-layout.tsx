@@ -60,7 +60,7 @@ export function ProductDetailLayout({
   fieldValues: Record<string, Record<string, string>>
   formatPrice: (amountCents: number, sourceCurrency?: string) => string
   galleryImages: ProductDetail["images"]
-  handleAddToCartClick: () => void
+  handleAddToCartClick: (sourceElement: HTMLElement) => void
   handleDeleteConfirm: () => void
   handleDeleteOpen: () => void
   handleEditOpen: () => void
@@ -85,10 +85,11 @@ export function ProductDetailLayout({
         currentCategoryId={detail.category._id}
         currentCategoryPath={detail.category.path}
         adminMode={mode === "admin"}
+        products={detail.products}
       />
 
-      <div className="mx-auto max-w-[1536px] px-4 py-4 sm:px-6 lg:px-10">
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+      <section className="mx-auto max-w-[1536px] px-4 pt-6 sm:px-6 lg:px-10">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <ShopHierarchyNav
             mode={mode}
             categories={detail.categories}
@@ -153,7 +154,7 @@ export function ProductDetailLayout({
             ) : null}
           </aside>
         </div>
-      </div>
+      </section>
       {mode !== "admin" && <ShopFooter categories={detail.categories} />}
       {mode === "admin" && (
         <>

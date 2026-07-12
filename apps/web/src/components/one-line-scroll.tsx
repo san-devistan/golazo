@@ -169,7 +169,7 @@ function OneLineScrollArrow({
 function OneLineScrollBar({ metrics }: { metrics: ScrollMetrics }) {
   const thumbStyle = useMemo(
     () => ({
-      transform: `translate3d(${metrics.thumbOffset}%, 0, 0)`,
+      marginLeft: `${metrics.thumbOffset}%`,
       width: `${metrics.thumbWidth}%`,
     }),
     [metrics.thumbOffset, metrics.thumbWidth]
@@ -178,7 +178,7 @@ function OneLineScrollBar({ metrics }: { metrics: ScrollMetrics }) {
   return (
     <div aria-hidden="true" className="mt-3 h-1.5 bg-[#e5e5e5]">
       <div
-        className="h-full bg-[#111] transition-transform"
+        className="h-full bg-[#111] transition-[margin-left]"
         style={thumbStyle}
       />
     </div>
@@ -197,7 +197,10 @@ function scrollMetricsForElement(scroller: HTMLDivElement): ScrollMetrics {
     MIN_SCROLLBAR_THUMB_WIDTH,
     (scroller.clientWidth / scroller.scrollWidth) * 100
   )
-  const scrollProgress = scroller.scrollLeft / maxScrollLeft
+  const scrollProgress = Math.min(
+    Math.max(scroller.scrollLeft / maxScrollLeft, 0),
+    1
+  )
   const thumbOffset = scrollProgress * (100 - thumbWidth)
 
   return {

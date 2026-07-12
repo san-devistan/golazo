@@ -18,8 +18,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@workspace/ui/components/sheet"
-import { MenuIcon } from "lucide-react"
-import { useCallback, useState } from "react"
+import { buttonVariants } from "@workspace/ui/lib/button-variants"
+import { cn } from "@workspace/ui/lib/utils"
+import {
+  ClipboardListIcon,
+  MailIcon,
+  MenuIcon,
+  SettingsIcon,
+} from "lucide-react"
+import { type ReactNode, useCallback, useState } from "react"
 
 export type {
   ShopHeaderCategory,
@@ -51,24 +58,32 @@ export function ShopHeader({
       )}
       <div className="border-b border-[#dfdfdf]">
         <div className="relative mx-auto flex min-h-[68px] max-w-[1536px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6 lg:flex-nowrap lg:px-10">
-          <ShopHeaderMobileMenu
-            categories={categories}
-            currentCategoryId={currentCategoryId}
-            currentCategoryPath={currentCategoryPath}
-            mode={mode}
-            open={isMobileMenuOpen}
-            onOpenChange={setIsMobileMenuOpen}
-          />
+          {!adminMode && (
+            <ShopHeaderMobileMenu
+              categories={categories}
+              currentCategoryId={currentCategoryId}
+              currentCategoryPath={currentCategoryPath}
+              mode={mode}
+              open={isMobileMenuOpen}
+              onOpenChange={setIsMobileMenuOpen}
+            />
+          )}
           <ShopHeaderBrand adminMode={adminMode} />
-          <ShopHeaderNavigation
-            categories={categories}
-            currentCategoryId={currentCategoryId}
-            currentCategoryPath={currentCategoryPath}
-            mode={mode}
-            products={products}
-            className="pointer-events-none absolute inset-x-0 hidden justify-center lg:flex"
-          />
-          <ShopHeaderActions products={products} />
+          {!adminMode && (
+            <ShopHeaderNavigation
+              categories={categories}
+              currentCategoryId={currentCategoryId}
+              currentCategoryPath={currentCategoryPath}
+              mode={mode}
+              products={products}
+              className="pointer-events-none absolute inset-x-0 hidden justify-center lg:flex"
+            />
+          )}
+          {adminMode ? (
+            <AdminHeaderActions />
+          ) : (
+            <ShopHeaderActions products={products} />
+          )}
         </div>
       </div>
     </header>
@@ -100,7 +115,7 @@ function ShopHeaderActions({
   const handleSearch = useCallback(
     (query: string) => {
       void navigate({
-        to: "/search",
+        to: "/products",
         search: query ? { q: query } : {},
       })
     },
@@ -118,6 +133,49 @@ function ShopHeaderActions({
       <LocaleCurrencySwitcher />
       <CustomerActions />
     </div>
+  )
+}
+
+function AdminHeaderActions() {
+  return (
+    <div className="ml-auto flex min-w-0 items-center gap-1">
+      <AdminHeaderActionLink
+        to="/admin/settings"
+        label="Product variant settings"
+      >
+        <SettingsIcon />
+      </AdminHeaderActionLink>
+      <AdminHeaderActionLink to="/admin/orders" label="Orders">
+        <ClipboardListIcon />
+      </AdminHeaderActionLink>
+      <AdminHeaderActionLink to="/admin/emails" label="Email previews">
+        <MailIcon />
+      </AdminHeaderActionLink>
+    </div>
+  )
+}
+
+function AdminHeaderActionLink({
+  children,
+  label,
+  to,
+}: {
+  children: ReactNode
+  label: string
+  to: "/admin/settings" | "/admin/orders" | "/admin/emails"
+}) {
+  return (
+    <Link
+      to={to}
+      title={label}
+      aria-label={label}
+      className={cn(
+        buttonVariants({ variant: "ghost", size: "icon-lg" }),
+        "rounded-none"
+      )}
+    >
+      {children}
+    </Link>
   )
 }
 

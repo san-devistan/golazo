@@ -1,3 +1,4 @@
+import { animateAddToCart } from "@/components/customer/cart-fly-to-icon"
 import { ProductDetailLayout } from "@/components/product-detail-layout"
 import {
   buildCartConfigurationSummary,
@@ -13,7 +14,11 @@ import type {
 } from "@/components/product-detail-types"
 import { readCatalogBackHrefSearch } from "@/lib/catalog-back-state"
 import { categoryHref } from "@/lib/catalog-navigation"
-import { cartConfigurationKey, useCustomerState } from "@/lib/customer-state"
+import {
+  cartConfigurationKey,
+  type CustomerProductSnapshot,
+  useCustomerState,
+} from "@/lib/customer-state"
 import { useMoneyFormatter, useTranslation } from "@/lib/preferences"
 import { getErrorMessage, hasConvexUrl } from "@/lib/shop"
 import {
@@ -148,6 +153,59 @@ function useProductConfiguratorDispatch(
   }
 }
 
+function useProductAddToCartHandler({
+  configuration,
+  customerState,
+  detail,
+  productSnapshot,
+  quantity,
+  setActionErrorMessage,
+  totalPriceCents,
+}: {
+  configuration: ProductConfigurationState
+  customerState: ReturnType<typeof useCustomerState>
+  detail: ProductDetail
+  productSnapshot: CustomerProductSnapshot
+  quantity: number
+  setActionErrorMessage: (value: SetStateAction<string | null>) => void
+  totalPriceCents: number
+}) {
+  return useCallback(
+    async (sourceElement: HTMLElement) => {
+      setActionErrorMessage(null)
+
+      try {
+        const configurationSummary = buildCartConfigurationSummary(
+          detail,
+          configuration
+        )
+        await customerState.addCartItem({
+          product: productSnapshot,
+          configurationKey: cartConfigurationKey(
+            detail.product._id,
+            configurationSummary
+          ),
+          configurationSummary,
+          unitPriceCents: totalPriceCents,
+          quantity,
+        })
+        animateAddToCart(sourceElement)
+      } catch (error) {
+        setActionErrorMessage(getErrorMessage(error))
+      }
+    },
+    [
+      configuration,
+      customerState,
+      detail,
+      productSnapshot,
+      quantity,
+      setActionErrorMessage,
+      totalPriceCents,
+    ]
+  )
+}
+
 function useProductConfiguratorElement({
   detail,
   mode,
@@ -274,28 +332,7 @@ function useProductConfiguratorElement({
     }
   }, [customerState, productSnapshot, setActionErrorMessage])
 
-  const handleAddToCart = useCallback(async () => {
-    setActionErrorMessage(null)
-
-    try {
-      const configurationSummary = buildCartConfigurationSummary(
-        detail,
-        configuration
-      )
-      await customerState.addCartItem({
-        product: productSnapshot,
-        configurationKey: cartConfigurationKey(
-          detail.product._id,
-          configurationSummary
-        ),
-        configurationSummary,
-        unitPriceCents: totalPriceCents,
-        quantity,
-      })
-    } catch (error) {
-      setActionErrorMessage(getErrorMessage(error))
-    }
-  }, [
+  const handleAddToCart = useProductAddToCartHandler({
     configuration,
     customerState,
     detail,
@@ -303,16 +340,19 @@ function useProductConfiguratorElement({
     quantity,
     setActionErrorMessage,
     totalPriceCents,
-  ])
+  })
   const handleEditOpen = useCallback(() => {
     setIsEditDialogOpen(true)
   }, [setIsEditDialogOpen])
   const handleDeleteOpen = useCallback(() => {
     setIsDeleteDialogOpen(true)
   }, [setIsDeleteDialogOpen])
-  const handleAddToCartClick = useCallback(() => {
-    void handleAddToCart()
-  }, [handleAddToCart])
+  const handleAddToCartClick = useCallback(
+    (sourceElement: HTMLElement) => {
+      void handleAddToCart(sourceElement)
+    },
+    [handleAddToCart]
+  )
   const handleToggleWishlistClick = useCallback(() => {
     void handleToggleWishlist()
   }, [handleToggleWishlist])

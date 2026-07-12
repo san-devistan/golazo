@@ -7,6 +7,7 @@ import type {
   productOptionTemplateWriteValidator,
   productOptionWriteValidator,
   productStatusValidator,
+  categoryKindValidator,
 } from "./shopValidators"
 
 export const DELETE_BATCH_SIZE = 200
@@ -14,7 +15,9 @@ export const CATEGORY_PAGE_CHILD_LIMIT = 60
 export const CATEGORY_PAGE_PRODUCTS_PER_SECTION = 80
 export const PRODUCT_IMAGE_LIMIT = 12
 export const PRODUCT_STATUSES = ["draft", "published", "archived"] as const
+export const CATEGORY_KINDS = ["collection", "group"] as const
 
+export type CategoryKind = Infer<typeof categoryKindValidator>
 export type ProductImageWrite = Infer<typeof productImageWriteValidator>
 export type ProductOptionWrite = Infer<typeof productOptionWriteValidator>
 export type ProductOptionConfig = ProductOptionWrite["config"]
@@ -58,6 +61,7 @@ export type CategoryDoc = {
   _id: CategoryId
   name: string
   slug: string
+  kind?: CategoryKind
   parentId: CategoryId | null
   path: string
   depth: number

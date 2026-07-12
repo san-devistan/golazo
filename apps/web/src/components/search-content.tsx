@@ -30,7 +30,9 @@ export function SearchContent({ initialQuery }: { initialQuery: string }) {
     () => searchProducts({ categories, products, query }),
     [categories, products, query]
   )
-  const backHref = query ? `/search?q=${encodeURIComponent(query)}` : "/search"
+  const backHref = query
+    ? `/products?q=${encodeURIComponent(query)}`
+    : "/products"
   const hasSearch = query.trim().length > 0
 
   const handleQueryChange = useCallback(
@@ -48,7 +50,7 @@ export function SearchContent({ initialQuery }: { initialQuery: string }) {
       const nextQuery = query.trim()
 
       void navigate({
-        to: "/search",
+        to: "/products",
         search: nextQuery ? { q: nextQuery } : {},
       })
     },
@@ -85,10 +87,6 @@ export function SearchContent({ initialQuery }: { initialQuery: string }) {
                 <SearchPlaceholderIcon />
               )}
             </form>
-            <p className="text-sm text-black/55" aria-live="polite">
-              {results.length} {results.length === 1 ? "product" : "products"}{" "}
-              found
-            </p>
           </div>
           <h1 className="font-oswald text-4xl leading-[0.92] font-bold tracking-normal uppercase sm:text-5xl lg:justify-self-end lg:text-right">
             Products

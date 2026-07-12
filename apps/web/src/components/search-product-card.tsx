@@ -1,6 +1,8 @@
 import type { ShopHeaderProduct } from "@/components/shop-header-navigation-data"
 import {
   ProductCard,
+  type ProductCardMediaChrome,
+  type ProductCardTextDensity,
   type StorefrontProduct,
 } from "@/components/shop-storefront"
 import {
@@ -15,10 +17,14 @@ export type SearchProduct = Omit<ShopHeaderProduct, "_id"> & {
 
 export function SearchProductCard({
   backHref,
+  mediaChrome,
   product,
+  textDensity,
 }: {
   backHref: string
+  mediaChrome?: ProductCardMediaChrome
   product: SearchProduct
+  textDensity?: ProductCardTextDensity
 }) {
   const customerState = useCustomerState()
 
@@ -28,6 +34,8 @@ export function SearchProductCard({
       currentPageHref={backHref}
       mode="public"
       customerState={customerState}
+      textDensity={textDensity}
+      mediaChrome={mediaChrome}
       className="group min-w-0 outline-[1.5px] outline-transparent transition focus-within:outline-[#111] hover:outline-[#111]"
     />
   )

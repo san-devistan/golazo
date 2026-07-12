@@ -20,6 +20,10 @@ export function catalogRootHref(mode: CatalogNavigationMode) {
   return mode === "admin" ? "/admin" : "/"
 }
 
+export function catalogProductsHref(mode: CatalogNavigationMode) {
+  return mode === "admin" ? "/admin" : "/products"
+}
+
 function catalogPathHref(path: string, mode: CatalogNavigationMode) {
   const normalizedPath = normalizeCatalogPath(path)
 

@@ -32,7 +32,7 @@ import {
   Trash2Icon,
   TruckIcon,
 } from "lucide-react"
-import { useCallback } from "react"
+import { type MouseEvent, useCallback } from "react"
 
 const PRODUCT_TRUST_SIGNALS = [
   { label: "Free shipping worldwide", icon: TruckIcon },
@@ -136,10 +136,17 @@ export function ProductPurchaseActions({
   addToCartLabel: string
   isFavorite: boolean
   quantity: number
-  onAddToCart: () => void
+  onAddToCart: (sourceElement: HTMLElement) => void
   onQuantityChange: (quantity: number) => void
   onToggleWishlist: () => void
 }) {
+  const handleAddToCartClick = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      onAddToCart(event.currentTarget)
+    },
+    [onAddToCart]
+  )
+
   return (
     <div className="mt-8 grid grid-cols-[minmax(0,1fr)_56px] gap-x-3 gap-y-5">
       <div className="col-span-full text-sm font-medium">Quantity</div>
@@ -148,7 +155,7 @@ export function ProductPurchaseActions({
       </div>
       <Button
         type="button"
-        onClick={onAddToCart}
+        onClick={handleAddToCartClick}
         className="h-14 justify-between rounded-none px-5 font-oswald text-base font-semibold tracking-normal"
       >
         <span>{addToCartLabel}</span>

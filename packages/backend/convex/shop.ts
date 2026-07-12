@@ -33,6 +33,7 @@ import {
   listCatalogHandler,
 } from "./shopQueryHandlers"
 import {
+  categoryKindValidator,
   productOptionTemplateWriteValidator,
   productUpsertArgsValidator,
 } from "./shopValidators"
@@ -98,6 +99,7 @@ export const archiveOptionTemplate = mutation({
 export const upsertCategory = mutation({
   args: {
     categoryId: v.union(v.id("catalogCategories"), v.null()),
+    kind: v.optional(categoryKindValidator),
     name: v.string(),
     parentId: v.union(v.id("catalogCategories"), v.null()),
     sortOrder: v.number(),

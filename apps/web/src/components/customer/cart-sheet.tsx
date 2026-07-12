@@ -1,13 +1,7 @@
-import { ProductThumb } from "@/components/customer/product-thumb"
-import { displayCartConfigurationValue } from "@/components/customer/utils"
+import { CartOrderItem } from "@/components/customer/cart-order-item"
 import type { CustomerCartItem } from "@/lib/customer-state"
-import {
-  useAppPreferences,
-  useMoneyFormatter,
-  useTranslation,
-} from "@/lib/preferences"
+import { useAppPreferences, useTranslation } from "@/lib/preferences"
 import { getErrorMessage } from "@/lib/shop"
-import { Link } from "@tanstack/react-router"
 import { Button } from "@workspace/ui/components/button"
 import {
   Sheet,
@@ -16,8 +10,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@workspace/ui/components/sheet"
-import { MinusIcon, PlusIcon, ShoppingBagIcon, Trash2Icon } from "lucide-react"
-import { useCallback, useMemo, useState } from "react"
+import { Trash2Icon } from "lucide-react"
+import { useCallback, useState } from "react"
 
 export function CartSheet({
   items,
@@ -29,7 +23,6 @@ export function CartSheet({
   onAuthRequired,
   onCheckout,
   onRemoveItem,
-  onSetQuantity,
 }: {
   items: Array<CustomerCartItem>
   isAuthenticated: boolean
@@ -40,7 +33,6 @@ export function CartSheet({
   onAuthRequired: () => void
   onCheckout: () => Promise<void>
   onRemoveItem: (configurationKey: string) => Promise<void>
-  onSetQuantity: (configurationKey: string, quantity: number) => Promise<void>
 }) {
   const { convertPriceCents, currency, formatPrice, t } = useAppPreferences()
   const totalCents = items.reduce(
@@ -49,11 +41,9 @@ export function CartSheet({
       convertPriceCents(item.unitPriceCents, item.currency) * item.quantity,
     0
   )
-  const productCount = items.reduce((total, item) => total + item.quantity, 0)
-  const productCountLabel = `${productCount} ${t(
-    productCount === 1 ? "productSingular" : "productPlural"
-  )}`
   const checkoutLabel = isAuthenticated ? t("checkout") : t("signInToCheckout")
+  const shippingText = formatPrice(0, currency)
+  const totalText = formatPrice(totalCents, currency)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handleOpenChange = useCallback(
@@ -78,17 +68,6 @@ export function CartSheet({
     [onRemoveItem]
   )
 
-  const handleSetQuantity = useCallback(
-    (configurationKey: string, quantity: number) => {
-      setErrorMessage(null)
-
-      void onSetQuantity(configurationKey, quantity).catch((error) => {
-        setErrorMessage(getErrorMessage(error))
-      })
-    },
-    [onSetQuantity]
-  )
-
   const checkout = useCallback(async () => {
     if (!isAuthenticated) {
       onAuthRequired()
@@ -110,8 +89,11 @@ export function CartSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="gap-1 rounded-none sm:max-w-md">
-        <SheetHeader className="pb-1">
+      <SheetContent
+        side="right"
+        className="gap-1 rounded-none data-[side=right]:sm:max-w-[32rem] data-[side=right]:lg:max-w-[34rem]"
+      >
+        <SheetHeader className="mb-4 border-b border-black/10 pb-3">
           <SheetTitle className="font-oswald text-2xl font-bold tracking-wide uppercase">
             {t("cartTitle")}
           </SheetTitle>
@@ -130,33 +112,42 @@ export function CartSheet({
               {t("cartEmpty")}
             </p>
           ) : (
-            <div className="divide-y">
+            <ul className="grid list-none gap-[0.65rem] p-0">
               {items.map((item) => (
                 <CartItemRow
                   key={item.configurationKey}
                   item={item}
                   onRemoveItem={handleRemoveItem}
-                  onSetQuantity={handleSetQuantity}
                 />
               ))}
-            </div>
+            </ul>
           )}
         </div>
         {items.length > 0 && (
-          <SheetFooter className="border-t">
-            <div className="flex items-end justify-between text-sm font-bold">
-              <span>{productCountLabel}</span>
-              <span className="font-oswald text-lg font-medium">
-                {formatPrice(totalCents, currency)}
-              </span>
+          <SheetFooter className="sticky bottom-0 z-10 mt-auto gap-4 border-t border-black/10 bg-white px-6 pt-4 pb-6 shadow-[0_-18px_30px_rgb(255_255_255/0.92)]">
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <CartSummaryRow
+                  label={t("shipping")}
+                  value={shippingText}
+                  variant="muted"
+                />
+                <CartSummaryRow
+                  label={t("total")}
+                  value={totalText}
+                  variant="total"
+                />
+              </div>
+              <p className="text-xs leading-[1.35] text-black/60">
+                {t("cartCheckoutNote")}
+              </p>
             </div>
             <Button
               type="button"
-              className="rounded-none"
+              className="min-h-12 rounded-none border border-[#111] bg-[#111] font-oswald text-base leading-none font-black tracking-normal text-white uppercase shadow-none hover:bg-white hover:text-[#111]"
               disabled={isAuthLoading || isCheckingOut}
               onClick={handleCheckoutClick}
             >
-              <ShoppingBagIcon className="size-4" />
               {isCheckingOut ? t("openingCheckout") : checkoutLabel}
             </Button>
           </SheetFooter>
@@ -166,116 +157,58 @@ export function CartSheet({
   )
 }
 
-function CartItemRow({
-  item,
-  onRemoveItem,
-  onSetQuantity,
+function CartSummaryRow({
+  label,
+  value,
+  variant,
 }: {
-  item: CustomerCartItem
-  onRemoveItem: (configurationKey: string) => void
-  onSetQuantity: (configurationKey: string, quantity: number) => void
+  label: string
+  value: string
+  variant: "muted" | "total"
 }) {
-  const formatPrice = useMoneyFormatter()
-  const t = useTranslation()
-  const productParams = useMemo(
-    () => ({ slug: item.productSlug }),
-    [item.productSlug]
-  )
-  const handleRemoveItem = useCallback(() => {
-    onRemoveItem(item.configurationKey)
-  }, [item.configurationKey, onRemoveItem])
-  const handleDecreaseQuantity = useCallback(() => {
-    onSetQuantity(item.configurationKey, item.quantity - 1)
-  }, [item.configurationKey, item.quantity, onSetQuantity])
-  const handleIncreaseQuantity = useCallback(() => {
-    onSetQuantity(item.configurationKey, item.quantity + 1)
-  }, [item.configurationKey, item.quantity, onSetQuantity])
-
-  return (
-    <div className="grid grid-cols-[80px_minmax(0,1fr)] items-start gap-3 py-3">
-      <Link to="/products/$slug" params={productParams}>
-        <ProductThumb imageUrl={item.imageUrl} name={item.productName} />
-      </Link>
-      <div className="relative min-w-0 pr-9">
-        <Link
-          to="/products/$slug"
-          params={productParams}
-          className="line-clamp-2 font-oswald text-base leading-5 font-bold tracking-wide uppercase hover:underline"
-        >
-          {item.productName}
-        </Link>
-        <CartConfigurationSummary item={item} />
-        <button
-          type="button"
-          aria-label={t("removeFromCart")}
-          className="absolute top-0 right-0 grid size-8 place-items-center text-muted-foreground transition hover:text-foreground"
-          onClick={handleRemoveItem}
-        >
-          <Trash2Icon className="size-4" />
-        </button>
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <QuantityControl
-            quantity={item.quantity}
-            onDecrease={handleDecreaseQuantity}
-            onIncrease={handleIncreaseQuantity}
-          />
-          <div className="ml-auto font-oswald text-sm font-medium">
-            {formatPrice(item.unitPriceCents, item.currency)}
-          </div>
-        </div>
+  if (variant === "total") {
+    return (
+      <div className="flex items-baseline justify-between gap-4 font-oswald font-extrabold tracking-normal text-[#111] uppercase">
+        <span className="text-[clamp(0.95rem,2.5vw,1.1rem)] leading-[0.95]">
+          {label}
+        </span>
+        <span className="text-right text-[clamp(1rem,2.75vw,1.2rem)] leading-[0.95]">
+          {value}
+        </span>
       </div>
-    </div>
-  )
-}
-
-function CartConfigurationSummary({ item }: { item: CustomerCartItem }) {
-  if (item.configurationSummary.length === 0) {
-    return null
+    )
   }
 
   return (
-    <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-      {item.configurationSummary.map((summary) => (
-        <div key={`${item.configurationKey}-${summary.label}`}>
-          {summary.label}: {displayCartConfigurationValue(summary)}
-        </div>
-      ))}
+    <div className="flex items-center justify-between gap-4 text-sm leading-[1.2] text-black/70">
+      <span>{label}</span>
+      <span>{value}</span>
     </div>
   )
 }
 
-function QuantityControl({
-  quantity,
-  onDecrease,
-  onIncrease,
+function CartItemRow({
+  item,
+  onRemoveItem,
 }: {
-  quantity: number
-  onDecrease: () => void
-  onIncrease: () => void
+  item: CustomerCartItem
+  onRemoveItem: (configurationKey: string) => void
 }) {
   const t = useTranslation()
+  const handleRemoveItem = useCallback(() => {
+    onRemoveItem(item.configurationKey)
+  }, [item.configurationKey, onRemoveItem])
 
   return (
-    <div className="inline-grid grid-cols-[32px_40px_32px] bg-muted">
+    <CartOrderItem item={item} variant="cart">
       <button
         type="button"
-        aria-label={t("decreaseQuantity")}
-        className="grid size-8 place-items-center"
-        onClick={onDecrease}
+        aria-label={t("removeFromCart")}
+        className="grid size-6 place-items-center text-[#111] transition hover:text-black/55 focus-visible:ring-2 focus-visible:ring-[#111]/30 focus-visible:outline-none"
+        onClick={handleRemoveItem}
       >
-        <MinusIcon className="size-3.5" />
+        <Trash2Icon className="size-4" />
       </button>
-      <div className="grid h-8 place-items-center text-xs font-bold">
-        {quantity}
-      </div>
-      <button
-        type="button"
-        aria-label={t("increaseQuantity")}
-        className="grid size-8 place-items-center"
-        onClick={onIncrease}
-      >
-        <PlusIcon className="size-3.5" />
-      </button>
-    </div>
+    </CartOrderItem>
   )
 }

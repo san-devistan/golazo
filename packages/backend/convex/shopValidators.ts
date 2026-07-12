@@ -6,6 +6,11 @@ export const productStatusValidator = v.union(
   v.literal("archived")
 )
 
+export const categoryKindValidator = v.union(
+  v.literal("collection"),
+  v.literal("group")
+)
+
 export const checkoutOrderStatusValidator = v.union(
   v.literal("pending"),
   v.literal("open"),

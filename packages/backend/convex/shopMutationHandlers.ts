@@ -25,6 +25,7 @@ import {
 } from "./shopQueryModel"
 import type {
   CategoryId,
+  CategoryKind,
   ProductId,
   ProductOptionTemplateId,
   ProductStatus,
@@ -88,6 +89,7 @@ export async function upsertCategoryHandler(
   ctx: MutationCtx,
   args: {
     categoryId: CategoryId | null
+    kind?: CategoryKind
     name: string
     parentId: CategoryId | null
     sortOrder: number
@@ -97,7 +99,8 @@ export async function upsertCategoryHandler(
   const now = Date.now()
   const name = normalizeRequiredText("Category name", args.name)
   const slug = slugify(name)
-  const placement = await getCategoryPlacement(ctx, args.parentId, slug)
+  const kind = args.kind ?? "collection"
+  const placement = await getCategoryPlacement(ctx, args.parentId, slug, kind)
 
   await assertNoCategoryCycle(ctx, args.categoryId, args.parentId)
   await assertUniqueSiblingSlug(ctx, args.categoryId, args.parentId, slug)
@@ -106,6 +109,7 @@ export async function upsertCategoryHandler(
     return await ctx.db.insert("catalogCategories", {
       name,
       slug,
+      kind,
       parentId: args.parentId,
       path: placement.path,
       depth: placement.depth,
@@ -123,6 +127,7 @@ export async function upsertCategoryHandler(
   await ctx.db.patch(args.categoryId, {
     name,
     slug,
+    kind,
     parentId: args.parentId,
     path: placement.path,
     depth: placement.depth,
@@ -137,6 +142,7 @@ export async function upsertCategoryHandler(
       ...existingCategory,
       name,
       slug,
+      kind,
       parentId: args.parentId,
       path: placement.path,
       depth: placement.depth,
