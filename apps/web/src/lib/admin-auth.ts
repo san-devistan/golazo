@@ -1,19 +1,24 @@
 import { redirect } from "@tanstack/react-router"
 import { createServerFn } from "@tanstack/react-start"
 
-type AdminAuthState = {
-  isAuthenticated: boolean
-  isConfigured: boolean
-}
+export type AdminAuthState =
+  | {
+      status: "admin"
+      user: AdminAuthUser
+    }
+  | {
+      status: "forbidden"
+      user: AdminAuthUser
+    }
+  | {
+      status: "signed-out"
+    }
 
-type AdminLoginInput = {
-  password: string
+export type AdminAuthUser = {
+  email: string
+  id: string
+  name: string
 }
-
-type AdminLoginResult =
-  | { status: "authenticated" }
-  | { status: "invalid-password" }
-  | { status: "not-configured" }
 
 const ADMIN_LOGIN_REDIRECT_FALLBACK = "/admin"
 
@@ -25,18 +30,10 @@ export const getAdminAuthState = createServerFn({ method: "GET" }).handler(
   }
 )
 
-export const loginAdmin = createServerFn({ method: "POST" })
-  .validator(validateAdminLoginInput)
-  .handler(async ({ data }): Promise<AdminLoginResult> => {
-    const { authenticateAdminPassword } = await import("./admin-auth.server")
-
-    return authenticateAdminPassword(data.password)
-  })
-
 export async function requireAdminAuth(redirectTo: string) {
   const authState = await getAdminAuthState()
 
-  if (!authState.isAuthenticated) {
+  if (authState.status !== "admin") {
     throw redirect({
       to: "/admin",
       search: {
@@ -62,18 +59,4 @@ export function normalizeAdminRedirect(value: unknown) {
   }
 
   return null
-}
-
-function validateAdminLoginInput(input: unknown): AdminLoginInput {
-  if (!input || typeof input !== "object") {
-    throw new Error("Password is required.")
-  }
-
-  const password = (input as { password?: unknown }).password
-
-  if (typeof password !== "string" || password.length === 0) {
-    throw new Error("Password is required.")
-  }
-
-  return { password }
 }

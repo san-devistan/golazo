@@ -1,5 +1,5 @@
+import { AdminAuthGate } from "@/components/admin-auth-gate"
 import { AdminCatalogWorkspace } from "@/components/admin-catalog-workspace"
-import { AdminPasswordGate } from "@/components/admin-password-gate"
 import { getAdminAuthState, normalizeAdminRedirect } from "@/lib/admin-auth"
 import { hasConvexUrl } from "@/lib/shop"
 import {
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/admin")({
   beforeLoad: async ({ location }) => {
     const adminAuth = await getAdminAuthState()
 
-    if (!adminAuth.isAuthenticated && !isAdminEntryPath(location.pathname)) {
+    if (adminAuth.status !== "admin" && !isAdminEntryPath(location.pathname)) {
       throw redirect({
         to: "/admin",
         search: {
@@ -45,13 +45,8 @@ function AdminLayout() {
   const location = useLocation()
   let content: React.ReactNode
 
-  if (!adminAuth.isConfigured || !adminAuth.isAuthenticated) {
-    content = (
-      <AdminPasswordGate
-        isConfigured={adminAuth.isConfigured}
-        redirectTo={redirectTo}
-      />
-    )
+  if (adminAuth.status !== "admin") {
+    content = <AdminAuthGate authState={adminAuth} redirectTo={redirectTo} />
   } else if (isAdminEntryPath(location.pathname)) {
     if (!hasConvexUrl()) {
       content = <MissingBackend />

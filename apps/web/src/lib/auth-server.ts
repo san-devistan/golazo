@@ -10,7 +10,7 @@ function requireServerEnv(name: string) {
   return value
 }
 
-export const { handler } = convexBetterAuthReactStart({
+export const { fetchAuthQuery, handler } = convexBetterAuthReactStart({
   convexUrl: requireServerEnv("VITE_CONVEX_URL"),
   convexSiteUrl: requireServerEnv("VITE_CONVEX_SITE_URL"),
 })

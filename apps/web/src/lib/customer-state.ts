@@ -1,5 +1,11 @@
 import { authClient } from "@/lib/auth-client"
 import {
+  anonymousStateMergeInput,
+  claimAnonymousStateMerge,
+  localStateMatchesAnonymousStateMergeKey,
+  releaseAnonymousStateMerge,
+} from "@/lib/customer-state-merge"
+import {
   CUSTOMER_STORAGE_KEY,
   EMPTY_LOCAL_STATE,
   emptyLocalState,
@@ -12,13 +18,7 @@ import type { CurrencyCode } from "@/lib/money"
 import { api } from "@workspace/backend/api"
 import { useAction, useMutation, useQuery } from "convex/react"
 import type { GenericId } from "convex/values"
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useSyncExternalStore,
-} from "react"
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react"
 
 const MAX_CART_QUANTITY = 99
 
@@ -144,6 +144,14 @@ function useLocalCustomerState() {
   )
 }
 
+function clearLocalStateAfterMerge(stateKey: string) {
+  setLocalCustomerState((state) =>
+    localStateMatchesAnonymousStateMergeKey(state, stateKey)
+      ? EMPTY_LOCAL_STATE
+      : state
+  )
+}
+
 function addLocalCartItem(state: LocalCustomerState, input: AddCartItemInput) {
   const existingItem = state.cartItems.find(
     (item) => item.configurationKey === input.configurationKey
@@ -251,7 +259,6 @@ export function useCustomerState() {
   )
   const removeServerCartItem = useMutation(api.customer.removeCartItem)
   const mergeAnonymousState = useMutation(api.customer.mergeAnonymousState)
-  const lastMergedUserIdRef = useRef<string | null>(null)
   const isAuthenticated = Boolean(session.data?.session)
   const serverStateReady = serverState !== undefined && serverState !== null
   const shouldUseServerState = isAuthenticated && serverStateReady
@@ -275,32 +282,26 @@ export function useCustomerState() {
       !isAuthenticated ||
       !serverStateReady ||
       !userId ||
-      emptyLocalState(localState) ||
-      lastMergedUserIdRef.current === userId
+      emptyLocalState(localState)
     ) {
       return
     }
 
-    lastMergedUserIdRef.current = userId
+    const input = anonymousStateMergeInput(localState)
+    const mergeClaim = claimAnonymousStateMerge(userId, input)
 
-    void mergeAnonymousState({
-      wishlistProductIds: localState.wishlistItems.map(
-        (item) => item.productId
-      ),
-      cartItems: localState.cartItems.map((item) => ({
-        productId: item.productId,
-        configurationKey: item.configurationKey,
-        configurationSummary: item.configurationSummary,
-        unitPriceCents: item.unitPriceCents,
-        quantity: item.quantity,
-      })),
-    })
+    if (!mergeClaim) {
+      return
+    }
+
+    void mergeAnonymousState(input)
       .then(() => {
-        setLocalCustomerState(() => EMPTY_LOCAL_STATE)
+        clearLocalStateAfterMerge(mergeClaim.stateKey)
+        releaseAnonymousStateMerge(mergeClaim.mergeKey)
         return null
       })
       .catch(() => {
-        lastMergedUserIdRef.current = null
+        releaseAnonymousStateMerge(mergeClaim.mergeKey)
       })
   }, [
     isAuthenticated,

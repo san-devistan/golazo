@@ -93,7 +93,7 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
-  betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  betterAuth: import("../betterAuth/_generated/component.js").ComponentApi<"betterAuth">;
   resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
   stripe: import("@convex-dev/stripe/_generated/component.js").ComponentApi<"stripe">;
 };
