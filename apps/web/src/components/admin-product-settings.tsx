@@ -14,7 +14,6 @@ import {
 import { priceInputToCents, sortBySortOrder } from "@/lib/shop"
 import { Link } from "@tanstack/react-router"
 import { api } from "@workspace/backend/api"
-import { Badge } from "@workspace/ui/components/badge"
 import { buttonVariants } from "@workspace/ui/lib/button-variants"
 import { useMutation, useQuery } from "convex/react"
 import { ArrowLeftIcon, ClipboardListIcon } from "lucide-react"
@@ -83,9 +82,6 @@ export function ProductSettings() {
               <ClipboardListIcon />
               Orders
             </Link>
-            <Badge variant="destructive">
-              Admin is public until auth exists
-            </Badge>
           </div>
         </div>
       </header>
