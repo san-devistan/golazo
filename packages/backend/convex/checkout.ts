@@ -19,7 +19,7 @@ import {
   isShippingAllowedCountry,
 } from "./stripeAllowedCountries"
 
-const SITE_URL_FALLBACK = "http://localhost:3000"
+const SITE_URL_FALLBACK = "https://golazo.localhost"
 const STRIPE_API_VERSION = "2026-02-25.clover" as const
 const MAX_STRIPE_DESCRIPTION_LENGTH = 900
 const stripeComponent = new StripeSubscriptions(components.stripe, {})
@@ -61,6 +61,57 @@ function requireStripeSecretKey() {
 
 function siteUrl() {
   return process.env.SITE_URL ?? SITE_URL_FALLBACK
+}
+
+function originFromUrl(value: string) {
+  return new URL(value).origin
+}
+
+function trustedCheckoutOrigins() {
+  const origins = new Set<string>([
+    originFromUrl(siteUrl()),
+    originFromUrl(SITE_URL_FALLBACK),
+  ])
+  const configuredOrigins = process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",")
+
+  for (const configuredOrigin of configuredOrigins ?? []) {
+    const trimmedOrigin = configuredOrigin.trim()
+
+    if (!trimmedOrigin) {
+      continue
+    }
+
+    try {
+      origins.add(originFromUrl(trimmedOrigin))
+    } catch {
+      // Better Auth supports non-URL origin patterns. Checkout returns only
+      // allow exact URL origins so wildcard patterns are intentionally ignored.
+    }
+  }
+
+  return origins
+}
+
+function checkoutReturnOrigin(value: string | undefined) {
+  const fallbackOrigin = originFromUrl(siteUrl())
+
+  if (!value) {
+    return fallbackOrigin
+  }
+
+  let returnOrigin: string
+
+  try {
+    returnOrigin = originFromUrl(value)
+  } catch {
+    throw new Error("Checkout return origin is invalid.")
+  }
+
+  if (!trustedCheckoutOrigins().has(returnOrigin)) {
+    throw new Error("Checkout return origin is not trusted.")
+  }
+
+  return returnOrigin
 }
 
 function normalizeCancelPath(value: string | undefined) {
@@ -147,6 +198,7 @@ export const createCartCheckout = action({
   args: {
     cancelPath: v.optional(v.string()),
     displayCurrency: v.optional(checkoutCurrencyValidator),
+    returnOrigin: v.optional(v.string()),
   },
   returns: v.object({
     sessionId: v.string(),
@@ -161,11 +213,18 @@ export const createCartCheckout = action({
 
     const userTokenIdentifier = identity.tokenIdentifier
     const displayCurrency = normalizeCheckoutCurrency(args.displayCurrency)
+    const checkoutSiteOrigin = checkoutReturnOrigin(args.returnOrigin)
     const eurToUsdRate =
       displayCurrency === BASE_CURRENCY ? 1 : await resolveEurToUsdRate()
+    const customerEmail = identity.email
     const order: PendingCheckoutOrder = await ctx.runMutation(
       internal.checkoutModel.createPendingOrderFromCart,
-      { displayCurrency, eurToUsdRate, userTokenIdentifier }
+      {
+        displayCurrency,
+        eurToUsdRate,
+        userTokenIdentifier,
+        ...(customerEmail ? { customerEmail } : {}),
+      }
     )
 
     try {
@@ -176,7 +235,6 @@ export const createCartCheckout = action({
       const stripe = new Stripe(requireStripeSecretKey(), {
         apiVersion: STRIPE_API_VERSION,
       })
-      const checkoutSiteUrl = siteUrl()
       const metadata = checkoutMetadata({
         commandId: order.commandId,
         orderId: order.orderId,
@@ -193,8 +251,8 @@ export const createCartCheckout = action({
         phone_number_collection: {
           enabled: true,
         },
-        success_url: `${checkoutSiteUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${checkoutSiteUrl}${normalizeCancelPath(args.cancelPath)}`,
+        success_url: `${checkoutSiteOrigin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${checkoutSiteOrigin}${normalizeCancelPath(args.cancelPath)}`,
         metadata,
         payment_intent_data: {
           metadata,

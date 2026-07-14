@@ -386,7 +386,13 @@ export function useCustomerState() {
         typeof window === "undefined"
           ? "/"
           : `${window.location.pathname}${window.location.search}`
-      const checkout = await createCartCheckout({ cancelPath, displayCurrency })
+      const returnOrigin =
+        typeof window === "undefined" ? undefined : window.location.origin
+      const checkout = await createCartCheckout({
+        cancelPath,
+        displayCurrency,
+        returnOrigin,
+      })
 
       window.location.assign(checkout.url)
     },

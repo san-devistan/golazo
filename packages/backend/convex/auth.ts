@@ -10,7 +10,7 @@ import authConfig from "./auth.config"
 import { sendTransactionalEmail } from "./emailDelivery"
 import { buildPasswordResetEmail } from "./orderEmailTemplates"
 
-const siteUrl = process.env.SITE_URL ?? "http://localhost:3000"
+const siteUrl = process.env.SITE_URL ?? "https://golazo.localhost"
 
 export const authComponent = createClient<DataModel>(components.betterAuth)
 

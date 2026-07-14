@@ -51,6 +51,9 @@ async function markOrderForCheckoutSession(
   failureReason?: string
 ) {
   const shippingDetails = checkoutShippingDetails(session)
+  const customerEmail = session.customer_details?.email
+  const customerPhone = session.customer_details?.phone
+  const shippingName = shippingDetails?.name
 
   await ctx.runMutation(
     internal.checkoutModel.completeOrderFromCheckoutSession,
@@ -64,9 +67,9 @@ async function markOrderForCheckoutSession(
       stripePresentmentAmountCents:
         session.presentment_details?.presentment_amount,
       stripePresentmentCurrency: checkoutPresentmentCurrency(session),
-      customerEmail: session.customer_details?.email ?? null,
-      customerPhone: session.customer_details?.phone ?? null,
-      shippingName: shippingDetails?.name ?? null,
+      ...(customerEmail ? { customerEmail } : {}),
+      ...(customerPhone ? { customerPhone } : {}),
+      ...(shippingName ? { shippingName } : {}),
       shippingAddress: stripeAddress(shippingDetails?.address),
       failureReason,
     }

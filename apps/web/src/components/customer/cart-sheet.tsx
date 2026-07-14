@@ -42,7 +42,7 @@ export function CartSheet({
     0
   )
   const checkoutLabel = isAuthenticated ? t("checkout") : t("signInToCheckout")
-  const shippingText = formatPrice(0, currency)
+  const shippingText = t("free")
   const totalText = formatPrice(totalCents, currency)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 

@@ -179,6 +179,7 @@ async function clearPurchasedCartItems(
 export const createPendingOrderFromCart = internalMutation({
   args: {
     userTokenIdentifier: v.string(),
+    customerEmail: v.optional(v.string()),
     displayCurrency: checkoutCurrencyValidator,
     eurToUsdRate: v.number(),
   },
@@ -252,6 +253,7 @@ export const createPendingOrderFromCart = internalMutation({
     const now = Date.now()
     const orderId = await ctx.db.insert("checkoutOrders", {
       userTokenIdentifier: args.userTokenIdentifier,
+      customerEmail: args.customerEmail ?? null,
       status: "pending",
       fulfillmentStatus: "unfulfilled",
       dropId: null,

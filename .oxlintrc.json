@@ -104,8 +104,6 @@
     "dist/**",
     "node_modules/**",
     "apps/web/src/routeTree.gen.*",
-    "apps/web/src/components/admin-catalog-workspace.tsx",
-    "apps/web/src/components/shop-storefront.tsx",
     "packages/backend/convex/_generated/**"
   ]
 }

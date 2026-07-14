@@ -3,7 +3,7 @@ import { type Infer } from "convex/values"
 import { deliveryNote } from "./emailDelivery"
 import type { checkoutFulfillmentStatusValidator } from "./shopValidators"
 
-const SITE_URL_FALLBACK = "http://localhost:3000"
+const SITE_URL_FALLBACK = "https://golazo.localhost"
 
 export type CheckoutFulfillmentStatus = Infer<
   typeof checkoutFulfillmentStatusValidator
